@@ -1,16 +1,20 @@
 import tablero
 
 
+#debe devovler "estado actualizado"
 def ejecutar_turno(estado,jugador):
   return 0
 
+#debe devolver "estado actualizado, jugado por la máquina."
 def turno_maquina(estado,jugador):
   return 0
 
+# debe devolver "ganador, o ninguno"
 def hay_gandor(estado):
   return False
 
 
+#debe devolver "estado inicial de una partida de dos jugadores"
 def nueva_partida_1v1(confguracion):
   return{
    "tableroPropio1"     :tablero.crear_tablero(confguracion["tamaño"],'o'),
@@ -22,6 +26,7 @@ def nueva_partida_1v1(confguracion):
    "funcionJugador2"    :ejecutar_turno,
   }
 
+#debe devolver estado inicial de una partida contra la máquina
 def nueva_partida_vs_maquina(confguracion):
   return{
    "tableroPropio1"     :tablero.crear_tablero(confguracion["tamaño"],'o'),
@@ -33,6 +38,7 @@ def nueva_partida_vs_maquina(confguracion):
    "funcionJugador2"    :turno_maquina,
   }
 
+#debe devolver "estado inicial de una partida entre dos máquinas"
 def nueva_maquina_vs_maquina(confguracion):
   return{
    "tableroPropio1"     :tablero.crear_tablero(confguracion["tamaño"],'o'),
