@@ -10,7 +10,7 @@ def turno_maquina(estado,jugador):
   return 0
 
 # debe devolver "ganador, o ninguno"
-def hay_gandor(estado):
+def hay_ganador(estado):
   return False
 
 
@@ -80,8 +80,19 @@ def main():
     print("3 - Partida maquina contra maquina")
     print("4 - Continuar una partida guardada")
     print("5 - Salir")
-    entrada=int(input("opcion:"))
+    print()
+
+    try:
+      entrada=int(input("Opción: "))
+      print()
+      if entrada < 1 or entrada > 5:
+        print("Opción inválida. Intente de nuevo.\n")
+    except ValueError:
+      print("Por favor, ingrese un número válido.\n")
+      entrada = -1
+
   estadoPartida={}
+
   match entrada:
     case 1:
       estadoPartida=nueva_partida_1v1(configuracionG)
