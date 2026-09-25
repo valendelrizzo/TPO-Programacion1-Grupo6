@@ -1,4 +1,5 @@
 import tablero
+from functools import reduce
 
 
 #debe devovler "estado actualizado"
