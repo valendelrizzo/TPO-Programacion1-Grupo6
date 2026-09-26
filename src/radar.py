@@ -1,14 +1,13 @@
 
 
-def buscar_nave_lineal(tablero_atacado, tablero_rival, pos):
+def buscar_nave_lineal(tablero_atacado, matriz_rival):
     comparaciones = 0
-    z = pos
-    for y in range(len(tablero_rival[z])):
-        for x in range(len(tablero_rival[z][y])):
+    for eje1 in range(len(matriz_rival)):
+        for eje2 in range(len(matriz_rival[eje1])):
             comparaciones += 1
-            if tablero_rival[z][y][x].isalpha() and tablero_rival[z][y][x] != "o":
-                if  tablero_atacado[z][y][x] == "~":
-                    tablero_atacado[z][y][x] = "?"
+            if matriz_rival[eje1][eje2].isalpha() and matriz_rival[eje1][eje2] != "o":
+                if  tablero_atacado[eje1][eje2] == "~":
+                    tablero_atacado[eje1][eje2] = "?"
 
 
     metricas = {
