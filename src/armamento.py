@@ -1,24 +1,47 @@
-#aciertosTorpedos = 0
+def celdas_misilracimo(tablero, punto, informacion):
+    z,x,y = punto
+    ataque_cordenadas(tablero, (z,x,y), informacion)
+    ataque_cordenadas(tablero, (z+1,x,y), informacion)
+    ataque_cordenadas(tablero, (z,x+1,y), informacion)
+    ataque_cordenadas(tablero, (z,x,y+1), informacion)
+    ataque_cordenadas(tablero, (z-1,x,y), informacion)
+    ataque_cordenadas(tablero, (z,x-1,y), informacion)
+    ataque_cordenadas(tablero, (z,x,y-1), informacion)
 
-def celdas_torpedo(tablero, punto, informacion):
+   
+def ataque_cordenadas(tablero, punto, informacion):
     if tablero[punto[0]][punto[1]][punto[2]] == "X":
-        return None
+            return None
     
     elif tablero[punto[0]][punto[1]][punto[2]] == "~":
         if informacion[punto[0]][punto[1]][punto[2]] == "#":
-           tablero[punto[0]][punto[1]][punto[2]] = "X"
-           #aciertosTorpedos = aciertosTorpedos + 1
+            tablero[punto[0]][punto[1]][punto[2]] = "X"
         else:
-           tablero[punto[0]][punto[1]][punto[2]] = "0"
+            tablero[punto[0]][punto[1]][punto[2]] = "0"
+
+def celdas_cargaprofundidad(tablero, punto, informacion):
+    _,x,y = punto
+    for i in range(len(tablero)):
+        ataque_cordenadas(tablero, (x,y,i), informacion)
+
+def celdas_torpedo(tablero, punto, informacion):
+    ataque_cordenadas(tablero, punto, informacion)
     return [punto]
 
 CATALOGO_ARMAS = {
-        'T': {'nombre': 'Torpedo', 'municion_inicial': None}
+        'T': {'nombre': 'Torpedo', 'municion_inicial': None},
+        'R': {'nombre': 'Misil de Racimo', 'municion_inicial': 3},
+        'C': {'nombre': 'Carga de Profundidad', 'municion_inicial': 2},
+        'S': {'nombre': 'Sonar', 'municion_inicial': 4},
+        'L': {'nombre': 'Barrido Láser', 'municion_inicial': 2},
+        'O': {'nombre': 'Onda Expansiva', 'municion_inicial': 1},
+        'G': {'nombre': 'Torpedo Guiado', 'municion_inicial': 1}
         }
 
 def catalogo(tablero, informacion):
    return"""====== CATALOGO ======
-T - TORPEDO"""
+T - TORPEDO
+R - MISIL DE RACIMO"""
 
    #opcion = input("INGRESE UNA OPCION:")
    #opcion = opcion.upper()
