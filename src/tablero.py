@@ -21,14 +21,5 @@ def aplicar_rebanada(mapa,rebanada,eje,indice):
       for x in range(len(rebanada[0])):
         mapa[z][x][indice]=rebanada[z][x]
 
-
-========= CAPA y = 3 =========
-x1 x2 x3 x4 x5 x6 x7 x8
-z1 ~ ~ ~ ~ P ~ ~ ~
-z2 ~ ~ X ~ ~ ~ ~ ~
-z3 ~ ~ X ~ o ~ ~ ~
-z4 ~ ~ ~ ~ ~ ~ ? ~
-
-
 def crear_tablero(tamano,char):
   return [[[char for _ in range(tamano)]for _ in range(tamano)]for _ in range(tamano)]

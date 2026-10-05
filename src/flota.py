@@ -92,10 +92,10 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
         x = celda[1]
         y = celda[2]
 
-        # REGLA 1: La nave no puede salirse del cubo (coordenadas entre 0 y N-1)
-        fuera_de_z = (z < 0) or (z > tamano_cubo)
-        fuera_de_x = (x < 0) or (x > tamano_cubo)
-        fuera_de_y = (y < 0) or (y > tamano_cubo)
+        # REGLA 1: La nave no puede salirse del cubo (coordenadas entre 1 y N)
+        fuera_de_z = (z < 1) or (z > tamano_cubo)
+        fuera_de_x = (x < 1) or (x > tamano_cubo)
+        fuera_de_y = (y < 1) or (y > tamano_cubo)
 
         if fuera_de_z or fuera_de_x or fuera_de_y:
             raise UbicacionInvalidaError(
