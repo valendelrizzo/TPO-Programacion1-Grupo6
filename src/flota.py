@@ -71,6 +71,116 @@ class UbicacionInvalidaError(Exception): ## algo generico dado que no vimos toda
     """Excepción lanzada cuando una nave no cumple las reglas de colocación."""
     pass
 
+## REVISAR que todo sea entre 0 inclusive y tamano del cubo - 1
+def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
+    """
+    Verifica que la nave cumpla con todas las restricciones:
+    1. Que ninguna celda quede fuera de los límites del cubo (1 a N).
+    2. Que cumpla con la restricción de altura o posición propia de su tipo.
+    3. Que no choque con otra nave ni esté pegada (al menos 1 celda libre en todas direcciones).
+    """
+    tamano_cubo = len(cubo) - 1 
+    datos_nave = CATALOGO_NAVES[tipo_nave]
+    regla = datos_nave['regla']
+    nombre_nave = datos_nave['nombre']
+
+    # =========================================================================
+    # PARTE 1: Validar límites del cubo y reglas de altura/caras por celda
+    # =========================================================================
+    for celda in celdas:
+        z = celda[0]
+        x = celda[1]
+        y = celda[2]
+
+        # REGLA 1: La nave no puede salirse del cubo (coordenadas entre 0 y N-1)
+        fuera_de_z = (z < 0) or (z > tamano_cubo)
+        fuera_de_x = (x < 0) or (x > tamano_cubo)
+        fuera_de_y = (y < 0) or (y > tamano_cubo)
+
+        if fuera_de_z or fuera_de_x or fuera_de_y:
+            raise UbicacionInvalidaError(
+                f"La celda ({z}, {x}, {y}) queda fuera del tablero (tamaño {tamano_cubo}x{tamano_cubo}x{tamano_cubo})."
+            )
+
+        # REGLA 2A: Submarino -> Solo en la mitad inferior de z (ej: en N=8, z <= 4)
+        if regla == 'mitad_inferior_z':
+            limite_inferior = tamano_cubo // 2
+            if z > limite_inferior:
+                raise UbicacionInvalidaError(
+                    f"El {nombre_nave} solo puede ubicarse en la mitad inferior (z <= {limite_inferior}). "
+                    f"La coordenada z={z} no está permitida."
+                )
+
+        # REGLA 2B: Portaaviones -> Solo en la mitad superior de z (ej: en N=8, z >= 5)
+        if regla == 'mitad_superior_z':
+            limite_superior = (tamano_cubo // 2) + 1
+            if z < limite_superior:
+                raise UbicacionInvalidaError(
+                    f"El {nombre_nave} solo puede ubicarse en la mitad superior (z >= {limite_superior}). "
+                    f"La coordenada z={z} no está permitida."
+                )
+
+        # REGLA 2C: Crucero -> No puede ocupar los bordes z = 1 ni z = N
+        if regla == 'no_bordes_z':
+            if z == 1 or z == tamano_cubo:
+                raise UbicacionInvalidaError(
+                    f"El {nombre_nave} no puede tocar los bordes z=1 ni z={tamano_cubo}. "
+                    f"La coordenada z={z} no está permitida."
+                )
+
+        # REGLA 2D: Estación orbital -> No puede tocar ninguna de las 6 caras exteriores del cubo
+        if regla == 'no_caras_exteriores':
+            toca_cara_z = (z == 1 or z == tamano_cubo)
+            toca_cara_x = (x == 1 or x == tamano_cubo)
+            toca_cara_y = (y == 1 or y == tamano_cubo)
+
+            if toca_cara_z or toca_cara_x or toca_cara_y:
+                raise UbicacionInvalidaError(
+                    f"La {nombre_nave} no puede tocar las caras exteriores del cubo. "
+                    f"La celda ({z}, {x}, {y}) toca un borde exterior."
+                )
+
+    # =========================================================================
+    # PARTE 2: Validar superposición y separación (al menos 1 celda libre alrededor)
+    # =========================================================================
+    # lista de celdas a un conjunto para búsquedas rápidas
+    conjunto_celdas_propias = set(celdas)
+
+    # Los desplazamientos posibles respecto a una celda: -1 (atrás), 0 (mismo lugar), +1 (adelante)
+    desplazamientos = [-1, 0, 1]
+
+    for celda in celdas:
+        z_actual = celda[0]
+        x_actual = celda[1]
+        y_actual = celda[2]
+
+        for dz in desplazamientos:
+            for dx in desplazamientos:
+                for dy in desplazamientos:
+                    vecino_z = z_actual + dz
+                    vecino_x = x_actual + dx
+                    vecino_y = y_actual + dy
+
+                    vecino_dentro = (1 <= vecino_z <= tamano_cubo and 
+                                     1 <= vecino_x <= tamano_cubo and 
+                                     1 <= vecino_y <= tamano_cubo)
+
+                    if vecino_dentro:
+                        coordenada_vecina = (vecino_z, vecino_x, vecino_y)
+
+                        if coordenada_vecina not in conjunto_celdas_propias:
+                            
+                            contenido = cubo[vecino_z - 1][vecino_x - 1][vecino_y - 1]
+
+                            if contenido not in ('~', 0, ' '):
+                                raise UbicacionInvalidaError(
+                                    f"No se puede ubicar la nave aca: la posición ({vecino_z}, {vecino_x}, {vecino_y}) "
+                                    f"ya está ocupada por otra nave o está a menos de una celda de distancia."
+                                )
+
+    # Si pasó todas las pruebas sin lanzar excepciones, la ubicación es válida
+    return True
+
 def parsear_punto(punto):
     """
     Recibe un punto como texto ("z,x,y") o como tupla/lista ((z, x, y)).
@@ -264,7 +374,7 @@ def ubicar_nave(cubo, flota, nave, puntoD, puntoH):
     p_hasta = parsear_punto(puntoH)
 
     celdas = generar_celdas_nave(nave, p_desde, p_hasta)
-    ## validar_reglas_ubicacion(cubo, nave, celdas) falta implementar -- REVISAR
+    validar_reglas_ubicacion(cubo, nave, celdas)
 
     # Marcado en el tablero
     for z, x, y in celdas:
