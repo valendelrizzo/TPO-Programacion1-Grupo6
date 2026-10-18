@@ -8,6 +8,7 @@ def _crear_partida(navesJ1,navesJ2,nombre=""):
     "naves2":navesJ2,
     "movimientos":[],
   }
+  
 def _crear_movimiento(arma,celdas):
   return {
     "arma":arma,

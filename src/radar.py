@@ -1,4 +1,5 @@
-
+import tablero
+import time
 
 def buscar_nave_lineal(tablero_atacado, matriz_rival):
     comparaciones = 0
@@ -19,19 +20,11 @@ def buscar_nave_lineal(tablero_atacado, matriz_rival):
     
     return metricas, tablero_atacado
 
-def menu_radares():
-    return """
-1- Busqueda lineal
-"""
-    
-   
 
-def main_radares(tablero_atacado, tablero_propio2, pos): 
-    print(menu_radares())
-    ingreso = int(input("tipo de radar? "))
-    match ingreso: 
-        case 1: 
-            tablero_atacado = buscar_nave_lineal(tablero_atacado, tablero_propio2, pos)
 
-    return tablero_atacado
+
+
+
+
+
 

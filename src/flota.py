@@ -79,7 +79,7 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
     2. Que cumpla con la restricción de altura o posición propia de su tipo.
     3. Que no choque con otra nave ni esté pegada (al menos 1 celda libre en todas direcciones).
     """
-    tamano_cubo = len(cubo) - 1 
+    tamano_cubo = len(cubo) 
     datos_nave = CATALOGO_NAVES[tipo_nave]
     regla = datos_nave['regla']
     nombre_nave = datos_nave['nombre']
@@ -172,7 +172,7 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
                             
                             contenido = cubo[vecino_z - 1][vecino_x - 1][vecino_y - 1]
 
-                            if contenido not in ('~', 0, ' '):
+                            if contenido not in ('~', 'o', 0, ' '):
                                 raise UbicacionInvalidaError(
                                     f"No se puede ubicar la nave aca: la posición ({vecino_z}, {vecino_x}, {vecino_y}) "
                                     f"ya está ocupada por otra nave o está a menos de una celda de distancia."
@@ -389,11 +389,269 @@ def ubicar_nave(cubo, flota, nave, puntoD, puntoH):
         'nombre': CATALOGO_NAVES[nave]['nombre'],
         'celdas': celdas,
         'impactos': set(),
+        'impactos_por_celda': {},
         'hundida': False
     })
 
     return cubo, flota
 
-#debe devolver "flota ubicada"
-def ubicacion_automatica(cubo,catalogo,semilla):
-  return 0
+def ubicacion_automatica(cubo, catalogo=None, semilla=None):
+    """
+    Ubica de forma automatica y aleatoria toda la flota.
+    
+    """
+    if catalogo is None:
+        catalogo = CATALOGO_NAVES
+
+    if semilla is not None:
+        #si hay semilla, se crea un generador con esa semilla fija
+        generador = random.Random(semilla)
+    else:
+        #si no hay semilla, se crea un generador con semilla aleatoria
+        generador = random.Random()
+
+
+    tamano_cubo = len(cubo)
+
+    # Se intenta ubicar la flota completa. Si en algun intento el tablero se bloquea,
+    # se reinicia el tablero y se vuelve a intentar desde cero (max 100 intentos globales)
+
+    for intento_global in range(100):
+        # 1) Limpieza del cubo: todas las celdas a 'o' (agua)
+        for z in range(tamano_cubo):
+            for x in range(tamano_cubo):
+                for y in range(tamano_cubo):
+                    cubo[z][x][y] = 'o'
+
+        flota_actual = []
+        pudo_ubicar_todo = True
+
+        # Se ordena las naves para colocar primero las mas grandes y restrictivas
+        orden_naves = ['E', 'P', 'C', 'S', 'D', 'F']
+
+        for tipo in orden_naves:
+            if tipo not in catalogo:
+                continue
+
+            cantidad_naves = catalogo[tipo]['cantidad']
+
+            for _ in range(cantidad_naves): ## for con la cantidad de naves que hay que ubicar de ese tipo
+                nave_colocada = False
+                intentos_nave = 0
+                max_intentos_por_nave = 300 ## Valor arbitrario.
+
+                while not nave_colocada and intentos_nave < max_intentos_por_nave:
+                    intentos_nave = intentos_nave + 1
+
+                    if tipo == 'E':
+                        # Estacion orbital: bloque 2x2x2 que no puede tocar bordes exteriores (2 a N-1)
+                        if tamano_cubo < 4:
+                            break
+                        z_inicio = generador.randint(2, tamano_cubo - 2)
+                        x_inicio = generador.randint(2, tamano_cubo - 2)
+                        y_inicio = generador.randint(2, tamano_cubo - 2)
+                        p_desde = (z_inicio, x_inicio, y_inicio)
+                        p_hasta = (z_inicio + 1, x_inicio + 1, y_inicio + 1)
+                    else:
+                        tamano_nave = catalogo[tipo]['tamano']
+                        eje_elegido = generador.choice(['z', 'x', 'y'])
+
+                        if eje_elegido == 'z':
+                            # Determinar rango permitido para z segun restricciones de cada nave
+                            if tipo == 'S':
+                                min_z, max_z = 1, tamano_cubo // 2
+                            elif tipo == 'P':
+                                min_z, max_z = (tamano_cubo // 2) + 1, tamano_cubo
+                            elif tipo == 'C':
+                                min_z, max_z = 2, tamano_cubo - 1
+                            else:
+                                min_z, max_z = 1, tamano_cubo
+
+                            if max_z - min_z + 1 < tamano_nave:
+                                continue
+
+                            z_inicio = generador.randint(min_z, max_z - tamano_nave + 1)
+                            z_fin = z_inicio + tamano_nave - 1
+                            x_inicio = x_fin = generador.randint(1, tamano_cubo)
+                            y_inicio = y_fin = generador.randint(1, tamano_cubo)
+
+                        elif eje_elegido == 'x':
+                            # Eje X varia
+                            if tipo == 'S':
+                                z_inicio = z_fin = generador.randint(1, tamano_cubo // 2)
+                            elif tipo == 'P':
+                                z_inicio = z_fin = generador.randint((tamano_cubo // 2) + 1, tamano_cubo)
+                            elif tipo == 'C':
+                                z_inicio = z_fin = generador.randint(2, tamano_cubo - 1)
+                            else:
+                                z_inicio = z_fin = generador.randint(1, tamano_cubo)
+
+                            x_inicio = generador.randint(1, tamano_cubo - tamano_nave + 1)
+                            x_fin = x_inicio + tamano_nave - 1
+                            y_inicio = y_fin = generador.randint(1, tamano_cubo)
+
+                        else:
+                            # Eje Y varia
+                            if tipo == 'S':
+                                z_inicio = z_fin = generador.randint(1, tamano_cubo // 2)
+                            elif tipo == 'P':
+                                z_inicio = z_fin = generador.randint((tamano_cubo // 2) + 1, tamano_cubo)
+                            elif tipo == 'C':
+                                z_inicio = z_fin = generador.randint(2, tamano_cubo - 1)
+                            else:
+                                z_inicio = z_fin = generador.randint(1, tamano_cubo)
+
+                            y_inicio = generador.randint(1, tamano_cubo - tamano_nave + 1)
+                            y_fin = y_inicio + tamano_nave - 1
+                            x_inicio = x_fin = generador.randint(1, tamano_cubo)
+
+                        p_desde = (z_inicio, x_inicio, y_inicio)
+                        p_hasta = (z_fin, x_fin, y_fin)
+
+                    try:
+                        ubicar_nave(cubo, flota_actual, tipo, p_desde, p_hasta)
+                        nave_colocada = True
+                    except UbicacionInvalidaError:
+                        nave_colocada = False
+
+                if not nave_colocada:
+                    pudo_ubicar_todo = False
+                    break
+
+            if not pudo_ubicar_todo:
+                break
+
+        if pudo_ubicar_todo:
+            return flota_actual
+
+    raise UbicacionInvalidaError("No se pudo ubicar la flota automaticamente tras multiples intentos.")
+
+
+def obtener_nave_en_punto(flota, punto):
+    """
+    Busca si alguna nave de la flota ocupa la coordenada 'punto'.
+    
+    """
+    coordenada = parsear_punto(punto)
+
+    for nave in flota:
+        if coordenada in nave['celdas']:
+            return nave
+
+    return None
+
+
+def nave_esta_hundida(nave):
+    """
+    Determina si una nave esta completamente destruida (hundida).
+    
+    Regla general: Todas sus celdas deben haber sido destruidas.
+    Regla del Portaaviones ('P'): Cada una de sus celdas requiere 2 impactos.
+    Otras naves: Cada celda requiere 1 impacto.
+    
+    """
+    impactos_por_celda = nave.get('impactos_por_celda', {})
+    tipo = nave['tipo']
+    impactos_necesarios = 2 if tipo == 'P' else 1
+
+    for celda in nave['celdas']:
+        impactos_en_esta_celda = impactos_por_celda.get(celda, 0)
+        if impactos_en_esta_celda < impactos_necesarios:
+            return False
+
+    return True
+
+
+def toda_la_flota_hundida(flota):
+    """
+    Verifica si todas las naves de la flota han sido destruidas.
+    Se utiliza en partida.py para determinar si hay un ganador.
+
+    """
+    if not flota:
+        return False
+
+    for nave in flota:
+        if not nave.get('hundida', False):
+            return False
+
+    return True
+
+
+def registrar_impacto(flota, punto):
+    """
+    Registra un disparo sobre la flota en la celda 'punto'.
+    
+    Evalua si el disparo cae en agua, si impacta una nave, si la averia o si la hunde.
+    Tambien reporta los efectos especiales de naves (Destructor, Estacion Orbital).
+
+    """
+    coordenada = parsear_punto(punto)
+    nave = obtener_nave_en_punto(flota, coordenada)
+
+    # 1. Caso: El disparo cayo en el agua
+    if nave is None:
+        return {
+            "resultado": "agua",
+            "tipo_nave": None,
+            "nombre_nave": None,
+            "mensaje": "Agua.",
+            "efecto_especial": None
+        }
+
+    # Inicializamos diccionarios de impactos si no estuvieran presentes
+    if 'impactos' not in nave:
+        nave['impactos'] = set()
+    if 'impactos_por_celda' not in nave:
+        nave['impactos_por_celda'] = {}
+
+    impactos_actuales = nave['impactos_por_celda'].get(coordenada, 0)
+    tipo = nave['tipo']
+    impactos_maximos_celda = 2 if tipo == 'P' else 1
+
+    # 2. Caso: La celda ya habia recibido los impactos maximos
+    if impactos_actuales >= impactos_maximos_celda:
+        return {
+            "resultado": "repetido",
+            "tipo_nave": tipo,
+            "nombre_nave": nave['nombre'],
+            "mensaje": f"La celda {coordenada} ya habia sido impactada previamente.",
+            "efecto_especial": None
+        }
+
+    # 3. Caso: Impacto exitoso sobre la celda
+    nave['impactos'].add(coordenada)
+    nave['impactos_por_celda'][coordenada] = impactos_actuales + 1
+
+    # Efecto especial del Destructor ('D'): Al ser impactada revela una celda ocupada del rival
+    efecto_especial = None
+    if tipo == 'D':
+        efecto_especial = "revelar_celda_rival"
+
+    # Se evalua si con este impacto la nave se hunde
+    if nave_esta_hundida(nave):
+        nave['hundida'] = True
+
+        # Efecto especial de la Estacion Orbital ('E'): Al hundirse otorga municion extra
+        if tipo == 'E':
+            efecto_especial = "otorgar_municion_extra"
+
+        return {
+            "resultado": "hundido",
+            "tipo_nave": tipo,
+            "nombre_nave": nave['nombre'],
+            "mensaje": f"¡Hundido! {nave['nombre']} completamente destruido.",
+            "efecto_especial": efecto_especial
+        }
+
+    # Si la nave recibio un impacto pero aun no esta hundida (averiada)
+    celdas_impactadas = len(nave['impactos'])
+    total_celdas = len(nave['celdas'])
+
+    return {
+        "resultado": "impacto",
+        "tipo_nave": tipo,
+        "nombre_nave": nave['nombre'],
+        "mensaje": f"Impacto. {nave['nombre']} averiado ({celdas_impactadas} de {total_celdas}).",
+        "efecto_especial": efecto_especial
+    }
