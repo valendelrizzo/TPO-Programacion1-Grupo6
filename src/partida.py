@@ -343,20 +343,24 @@ if __name__ == "__main__":
     while main():
         pass
 
-#Dejar esto en funcion partida
+"""
+Consultar si las busques lineales, optimizada, etc. buscan naves en especifico
+"""
+
 def ejecucion_radar(tablero_atacado, tablero_propio2, pos): 
     print(menu_radares())
     ingreso = int(input("tipo de radar? (Ingrese indice)"))
     
     match ingreso: 
         case 1: 
-            tablero_atacado = radar.buscar_nave_lineal(tablero_atacado, tablero_propio2, pos)
-        ##case 2:
-          ##  tablero_atacado = buscar_nave_optimizado(tablero_atacado, tablero_propio2, pos)
+            metricas, tablero_atacado = radar.buscar_nave_lineal(tablero_atacado, tablero_propio2, pos)
+        case 2:
+          metricas, tablero_atacado = radar.buscar_nave_optimizada(tablero_atacado, tablero_propio2, pos)
 
-    return tablero_atacado
+    return tablero_atacado , metricas
 
 def menu_radares():
     return """
 1- Busqueda lineal
+2- Busqueda optimizada
 """
