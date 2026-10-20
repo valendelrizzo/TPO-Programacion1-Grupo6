@@ -1,82 +1,50 @@
-"""
-importe la funcion perf_counter del modulo time para poder sacar las metricas de la funcion(el tiempo)
-Busqueda optimizada solo revisa posiciones pares reduciendo el tiempo, pero no muestra todo el barco, solo algunos ?
-Uso round para acortar el numero que me tira perf_counter
-
-Cosas que supuse:
-En el TPO  
-Sonar por planos -> usa a tablero.py.
-Mientras que las busquedas recorren todo el cubo. Devolviendo metricas y resultados.
-Por lo que entendi sonar por planos es una funcion diferente a las 3 busquedas. 
-La busqueda optimizada no devuelve todas las posiciones del barco que encontro, detecta partes de los barcos si, en las posiciones pares. Osea no todo el barco
-
-"""
 
 
 from time import perf_counter
 from tablero import obtener_rebanada, aplicar_rebanada
 
-def buscar_nave_lineal(tablero_atacado, matriz_rival, nave):
+def busqueda_nave_lineal(tablero_propio1, tablero_atacado1, tablero_propio2, tablero_atacado2):
+    """ Si hay ganador devuelve ganador sino None + metricas
+    compara cada conjunto de tableros... tablero propio + tablero atacado (del oponente)
     """
-    Búsqueda lineal completa en todo el cubo (z, x, y) celda por celda.
-    Busca la nave específica indicada en el parámetro 'nave'.
-    """
+    inicio = perf_counter()
     comparaciones = 0
-    inicio_tiempo = perf_counter()
-    n = len(matriz_rival)
-    nave_buscada = nave.upper()
-    
-    for z in range(n):
-        for x in range(n):
-            for y in range(n):
-                comparaciones += 1
-                celda = matriz_rival[z][x][y]
-                
-                # Comparación directa con la nave recibida
-                if celda.upper() == nave_buscada:
-                    if tablero_atacado[z][x][y] == "~":
-                        tablero_atacado[z][x][y] = "?"
+    ganador = None
 
-    fin_tiempo = perf_counter()
-    tiempo_ms = (fin_tiempo - inicio_tiempo) * 1000
+    tableros = (
+        ("jugador2", tablero_propio1, tablero_atacado2),
+        ("jugador1", tablero_propio2, tablero_atacado1),
+    )
 
-    metricas = {
-        "comparaciones": comparaciones,
-        "tiempo_ms": round(tiempo_ms, 2),
-        "profundidad_max": 3
-    }
-    
-    return metricas, tablero_atacado
+    for posible_ganador, tablero_propio, tablero_atacado in tableros:
+        hay_naves = False
+        todas_impactadas = True
 
-
-def buscar_nave_optimizada(tablero_atacado, matriz_rival, nave):
-    comparaciones = 0
-    inicio_tiempo = perf_counter()
-    n = len(matriz_rival)
-    nave_buscada = nave.upper()
-    
-    # Recorremos el cubo aplicando el filtro de ajedrez 3D (paridad)
-    for z in range(n):
-        for x in range(n):
-            for y in range(n):
-                if (z + x + y) % 2 == 0:
+        for z in range(len(tablero_propio)):
+            for x in range(len(tablero_propio[z])):
+                for y in range(len(tablero_propio[z][x])):
                     comparaciones += 1
-                    celda = matriz_rival[z][x][y]
-                    
-                    if celda.upper() == nave_buscada:
-                        if tablero_atacado[z][x][y] == "~":
-                            tablero_atacado[z][x][y] = "?"
+                    celda = tablero_propio[z][x][y]
 
-    fin_tiempo = perf_counter()
-    tiempo_ms = (fin_tiempo - inicio_tiempo) * 1000
+                    if celda not in ("~", "o", " ", 0):
+                        hay_naves = True
+                        if tablero_atacado[z][x][y] != "X":
+                            todas_impactadas = False
 
+        if hay_naves and todas_impactadas and ganador is None:
+            ganador = posible_ganador
+
+    tiempo_ms = (perf_counter() - inicio) * 1000
     metricas = {
         "comparaciones": comparaciones,
         "tiempo_ms": round(tiempo_ms, 2),
-        "profundidad_max": 3
+        "profundidad_max": 3,
     }
-    
-    return metricas, tablero_atacado
+
+    return ganador, metricas
+
+
+
 def sonar_por_planos(tablero_atacado, matriz_rival, eje_fijo, indice):
     """
     Sonar: Extrae rebanada, cuenta contactos 
