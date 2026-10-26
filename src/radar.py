@@ -3,7 +3,7 @@ import tablero
 
 
 def busqueda_nave_lineal(cubo, tipo_nave):
-    """Recibe cubo y letra. Devuelve puntos y metricas, sin indice auxiliar ni excepciones."""
+    """Recibe cubo y letra. Devuelve puntos y metricas, sin indice auxiliar ni excepciones"""
     inicio = perf_counter()
     comparaciones = 0
     puntos = []
@@ -22,33 +22,35 @@ def busqueda_nave_lineal(cubo, tipo_nave):
 
 
 def crear_indice_naves(cubo):
-    """Devuelve letra -> puntos. Se arma una vez para evitar recorrer el cubo en cada consulta."""
+    """Devuelve letra -> puntos. Se arma una vez para evitar recorrer el cubo en cada consulta"""
     indice = {}
     for z in range(len(cubo)):
         for x in range(len(cubo[z])):
             for y in range(len(cubo[z][x])):
                 letra = cubo[z][x][y]
-                if letra in ('F', 'D', 'S', 'C', 'P', 'E'):
+                #TODO: estas letras irian vien como constante global?
+                if letra in ('F','D','S','C','P','E'):
                     if letra not in indice:
-                        indice[letra] = []
-                    indice[letra].append((z + 1, x + 1, y + 1))
+                        indice[letra]=[]
+                    indice[letra].append((z+1,x+1,y+1))
     return indice
 
 
 def busqueda_nave_optimizada(indice, tipo_nave):
-    """Recibe indice ya construido y letra. Devuelve puntos y metricas de la consulta."""
+    """Recibe indice ya construido y letra. Devuelve puntos y metricas de la consulta"""
+    #test de timing que falta que veamos en calse
     inicio = perf_counter()
-    puntos = list(indice.get(tipo_nave, []))
-    metricas = {
+    puntos = list(indice.get(tipo_nave,[]))
+    metricas={
         'comparaciones': 1,
-        'tiempo_ms': (perf_counter() - inicio) * 1000,
+        'tiempo_ms': (perf_counter()-inicio)*1000,
         'profundidad_max': 0
     }
     return puntos, metricas
 
 
 def sonar_por_planos(tablero_atacado, matriz_rival, eje_fijo, indice):
-    """Recibe cubos, eje e indice desde 0. Devuelve contactos y cubo; lanza ErrorTablero."""
+    """Recibe cubos, eje e indice desde 0. Devuelve contactos y cubo; lanza ErrorTablero"""
     contactos = 0
     plano_rival = tablero.obtener_rebanada(matriz_rival, eje_fijo, indice)
     plano_atacado = tablero.obtener_rebanada(tablero_atacado, eje_fijo, indice)
