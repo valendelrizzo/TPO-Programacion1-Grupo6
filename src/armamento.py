@@ -1,8 +1,8 @@
 from radar import sonar_por_planos
+import tablero as cubo
+import flota
 
-# ================= CATALOGO Y MUNICION =================
-
-CATALOGO_ARMAS = {
+CATALOGO_ARMAS={
     'T': {
         'nombre': 'Torpedo',
         'municion_inicial': None
@@ -20,7 +20,7 @@ CATALOGO_ARMAS = {
         'municion_inicial': 4
     },
     'L': {
-        'nombre': 'Barrido Láser',
+        'nombre': 'Barrido Laser',
         'municion_inicial': 2
     },
     'O': {
@@ -34,323 +34,203 @@ CATALOGO_ARMAS = {
 }
 
 
+class ErrorArmamento(cubo.ErrorJuego):
+    """Arma, objetivo o municion no validos."""
+    pass
+
+
 def crear_municion_jugador():
+    """Devuelve municion nueva desde el catalogo; None significa ilimitada."""
     municion = {}
     for codigo in CATALOGO_ARMAS:
-        municion[codigo] = CATALOGO_ARMAS[codigo]["municion_inicial"]
+        municion[codigo] = CATALOGO_ARMAS[codigo]['municion_inicial']
     return municion
 
 
-# Diccionario general para administrar la munición de ambos jugadores
-MUNICION_JUGADORES = {
-    1: crear_municion_jugador(),
-    2: crear_municion_jugador()
-}
-
-
 def tiene_municion(codigo_arma, municion_jugador):
+    """Devuelve si el arma tiene municion; no modifica datos ni lanza excepciones."""
     if codigo_arma not in municion_jugador:
         return False
-
     cantidad = municion_jugador[codigo_arma]
-
-    # None significa munición ilimitada (Torpedo)
-    if cantidad == None:
-        return True
-
-    return cantidad > 0
+    return cantidad is None or cantidad > 0
 
 
 def descontar_municion(codigo_arma, municion_jugador, consumo):
-    # Si no es ilimitada, le restamos el consumo (que vale 1 o 0)
-    if municion_jugador[codigo_arma] != None:
-        municion_jugador[codigo_arma] = municion_jugador[codigo_arma] - consumo
-
+    """Descuenta consumo y devuelve el saldo. Lanza ErrorArmamento si no alcanza."""
+    if codigo_arma not in municion_jugador or consumo < 0:
+        raise ErrorArmamento('Arma o consumo invalido.')
+    cantidad = municion_jugador[codigo_arma]
+    if cantidad is not None:
+        if cantidad < consumo:
+            raise ErrorArmamento('No queda municion.')
+        municion_jugador[codigo_arma] -= consumo
     return municion_jugador[codigo_arma]
 
 
-# ================= VALIDACIONES Y ATAQUE BASE =================
-
 def en_rango(tablero, punto):
-    # 1. Verificar que tenga 3 coordenadas
-    if len(punto) != 3:
-        return False
-
-    # 2. Verificar que las 3 sean números enteros
-    for valor in punto:
-        if type(valor) != int:
-            return False
-
-    z, x, y = punto
-
-    # 3. Verificar que no se salga de los límites del tablero
-    if z < 0 or z >= len(tablero):
-        return False
-
-    if x < 0 or x >= len(tablero[z]):
-        return False
-
-    return not (y < 0 or y >= len(tablero[z][x]))
+    """Devuelve si el punto contiene enteros desde 1 hasta N, sin lanzar excepciones."""
+    return cubo.validar_punto(tablero, punto)
 
 
 def validacion_cordenadas(tablero, punto):
+    """Devuelve ejecutado o no ejecutado segun el rango del punto, sin modificar datos."""
     if not en_rango(tablero, punto):
-        return "no ejecutado"
-
-    z, x, y = punto
-    celda = tablero[z][x][y]
-
-    # Es válido disparar si hay agua ("~" o " ") o si fue marcada por el Sonar ("?")
-    if celda != "~" and celda != "?" and celda != " ":
-        return "no ejecutado"
-
-    return "ejecutado"
+        return 'no ejecutado'
+    return 'ejecutado'
 
 
-def ataque_cordenadas(tablero, punto, informacion):
+def ataque_cordenadas(tablero, punto, informacion, flota_rival, ignorar_submarino=False):
+    """Aplica un impacto y devuelve su detalle. Recibe punto desde 1; lanza ErrorTablero."""
     if not en_rango(tablero, punto):
-        return {
-            "punto": punto,
-            "resultado": "invalida"
-        }
-
-    z, x, y = punto
-    celda_atacada = tablero[z][x][y]
-    celda_rival = informacion[z][x][y]
-
-    # 1. Si ya fue atacada antes ("X" impacto o "o" agua), no se vuelve a atacar
-    if celda_atacada == "X" or celda_atacada == "o":
-        return {
-            "punto": punto,
-            "resultado": "invalida"
-        }
-
-    # 2. Si hay una nave presente (mismo criterio que radar.py)
-    if celda_rival != "~" and celda_rival != "o" and celda_rival != " ":
-        tablero[z][x][y] = "X"
-        return {
-            "punto": punto,
-            "resultado": "X"
-        }
-
-    # 3. Disparo al agua: se marca con "o" minúscula
-    tablero[z][x][y] = "o"
-    return {
-        "punto": punto,
-        "resultado": "o"
-    }
+        return {'punto': punto, 'resultado': 'invalida'}
+    nave = flota.obtener_nave_en_punto(flota_rival, punto)
+    if ignorar_submarino and nave is not None and nave['tipo'] == 'S':
+        return {'punto': punto, 'resultado': 'inmune'}
+    if cubo.leer_celda(tablero, punto) in (cubo.AGUA_MARCADA, cubo.HUNDIDO):
+        return {'punto': punto, 'resultado': 'repetido'}
+    detalle = flota.registrar_impacto(flota_rival, punto)
+    resultado = detalle['resultado']
+    simbolo = cubo.IMPACTO
+    if resultado == 'repetido':
+        simbolo = 'repetido'
+    elif resultado == 'agua':
+        simbolo = cubo.AGUA_MARCADA
+        cubo.escribir_celda(tablero, punto, simbolo)
+    else:
+        cubo.escribir_celda(tablero, punto, simbolo)
+        if resultado == 'hundido':
+            for celda in nave['celdas']:
+                cubo.escribir_celda(tablero, celda, cubo.HUNDIDO)
+    return {'punto': punto, 'resultado': simbolo, 'detalle': detalle}
 
 
-def crear_resultado_arma(codigo_arma, punto, estado, celdas, municion_restante=None, motivo="ok"):
-    if celdas is None:
-        celdas = []
-
-    # Separamos las coordenadas según lo que pasó en cada una
+def crear_resultado_arma(codigo_arma, punto, estado, celdas, municion_restante=None, motivo='ok'):
+    """Agrupa los resultados por celda y devuelve el resumen de un ataque, sin excepciones."""
     impactos = []
     agua = []
     invalidas = []
-
     for item in celdas:
-        if item["resultado"] == "X":
-            impactos.append(item["punto"])
-        elif item["resultado"] == "o":
-            agua.append(item["punto"])
+        if item['resultado'] == cubo.IMPACTO:
+            impactos.append(item['punto'])
+        elif item['resultado'] == cubo.AGUA_MARCADA:
+            agua.append(item['punto'])
         else:
-            invalidas.append(item["punto"])
-
-    if estado == "ejecutado":
-        consumo = 1
-        exito = True
-    else:
-        consumo = 0
-        exito = False
-        if motivo == "ok":
-            motivo = "coordenada invalida"
-
+            invalidas.append(item['punto'])
+    exito = estado == 'ejecutado'
     return {
-        "codigo_arma": codigo_arma,
-        "punto_origen": punto,
-        "estado": estado,
-        "exito": exito,
-        "motivo": motivo,
-        "consumo_municion": consumo,
-        "municion_restante": municion_restante,
-        "celdas": celdas,
-        "impactos": impactos,
-        "agua": agua,
-        "invalidas": invalidas,
-        "cantidad_impactos": len(impactos)
+        'codigo_arma': codigo_arma, 'punto_origen': punto, 'estado': estado,
+        'exito': exito, 'motivo': motivo, 'consumo_municion': int(exito),
+        'municion_restante': municion_restante, 'celdas': celdas,
+        'impactos': impactos, 'agua': agua, 'invalidas': invalidas,
+        'cantidad_impactos': len(impactos)
     }
 
 
-# ================= FUNCIONES DE ARMAS =================
-
-def celdas_torpedo(tablero, punto, informacion):
-    estado = validacion_cordenadas(tablero, punto)
+def aplicar_celdas(codigo, tablero, punto, informacion, flota_rival, puntos):
+    """Aplica puntos validos y devuelve un resultado. Lanza ErrorTablero ante cubos invalidos."""
     resultados = []
-
-    if estado == "ejecutado":
-        resultado = ataque_cordenadas(tablero, punto, informacion)
-        resultados.append(resultado)
-
-    resultadoFinal = crear_resultado_arma("T", punto, estado, resultados)
-    return resultadoFinal
-
-
-def celdas_misilracimo(tablero, punto, informacion):
-    estado = validacion_cordenadas(tablero, punto)
-    resultados = []
-
-    if estado == "ejecutado":
-        z, x, y = punto
-        celdas = [
-            (z, x, y),      # Centro
-            (z + 1, x, y),  # Arriba / profundidad +
-            (z - 1, x, y),  # Abajo / profundidad -
-            (z, x + 1, y),  # X +
-            (z, x - 1, y),  # X -
-            (z, x, y + 1),  # Y +
-            (z, x, y - 1)   # Y -
-        ]
-
-        for celda in celdas:
-            resultado = ataque_cordenadas(tablero, celda, informacion)
-            resultados.append(resultado)
-
-    resultadoFinal = crear_resultado_arma("R", punto, estado, resultados)
-    return resultadoFinal
+    for celda in puntos:
+        resultados.append(ataque_cordenadas(tablero, celda, informacion, flota_rival, codigo == 'L'))
+    estado = 'no ejecutado'
+    for resultado in resultados:
+        if resultado['resultado'] in (cubo.IMPACTO, cubo.AGUA_MARCADA, 'inmune'):
+            estado = 'ejecutado'
+    motivo = 'ok'
+    if estado == 'no ejecutado':
+        motivo = 'No hay celdas nuevas para atacar.'
+    return crear_resultado_arma(codigo, punto, estado, resultados, motivo=motivo)
 
 
-def celdas_cargaprofundidad(tablero, punto, informacion):
-    estado = validacion_cordenadas(tablero, punto)
-    resultados = []
-
-    if estado == "ejecutado":
-        _, x, y = punto
-        for z in range(len(tablero)):
-            celda = (z, x, y)
-            resultado = ataque_cordenadas(tablero, celda, informacion)
-            resultados.append(resultado)
-
-    resultadoFinal = crear_resultado_arma("C", punto, estado, resultados)
-    return resultadoFinal
+def celdas_torpedo(tablero, punto, informacion, flota_rival, eje=None):
+    """Devuelve el ataque a una celda desde 1. Usa la flota rival para registrar el impacto."""
+    return aplicar_celdas('T', tablero, punto, informacion, flota_rival, [punto])
 
 
-def celdas_barridolaser(tablero, punto, informacion, eje):
-    estado = validacion_cordenadas(tablero, punto)
-    resultados = []
+def celdas_misilracimo(tablero, punto, informacion, flota_rival, eje=None):
+    """Devuelve el ataque al centro y sus vecinos ortogonales. Lanza ErrorTablero fuera de rango."""
+    puntos = [punto] + cubo.vecinos(tablero, punto)
+    return aplicar_celdas('R', tablero, punto, informacion, flota_rival, puntos)
 
-    if estado == "ejecutado":
-        z, x, y = punto
 
-        if eje == "Y":
-            for i in range(len(tablero[z][x])):
-                celda = (z, x, i)
-                resultado = ataque_cordenadas(tablero, celda, informacion)
-                resultados.append(resultado)
+def celdas_cargaprofundidad(tablero, punto, informacion, flota_rival, eje=None):
+    """Devuelve el ataque a toda la recta z que pasa por el punto desde 1."""
+    z, x, y = punto
+    puntos = []
+    for valor in range(1, len(tablero) + 1):
+        puntos.append((valor, x, y))
+    return aplicar_celdas('C', tablero, punto, informacion, flota_rival, puntos)
 
-        elif eje == "X":
-            for j in range(len(tablero[z])):
-                celda = (z, j, y)
-                resultado = ataque_cordenadas(tablero, celda, informacion)
-                resultados.append(resultado)
 
-    resultadoFinal = crear_resultado_arma("L", punto, estado, resultados)
-    return resultadoFinal
+def celdas_barridolaser(tablero, punto, informacion, flota_rival, eje):
+    """Devuelve un ataque sobre x o y, sin afectar submarinos. Lanza ErrorArmamento por eje."""
+    if eje not in ('x', 'y'):
+        raise ErrorArmamento('El laser requiere el eje x o y.')
+    z, x, y = punto
+    puntos = []
+    for valor in range(1, len(tablero) + 1):
+        if eje == 'x':
+            puntos.append((z, valor, y))
+        else:
+            puntos.append((z, x, valor))
+    return aplicar_celdas('L', tablero, punto, informacion, flota_rival, puntos)
+
+
+def celdas_sonar(tablero, punto, informacion, flota_rival, eje=None):
+    """Recibe el valor del plano en punto y devuelve contactos, sin dano. Lanza ErrorJuego."""
+    if type(punto) != int:
+        raise ErrorArmamento('El valor del plano debe ser entero.')
+    contactos, tablero = sonar_por_planos(tablero, informacion, eje, punto - 1)
+    resultado = crear_resultado_arma('S', None, 'ejecutado', [])
+    resultado['contactos'] = contactos
+    resultado['eje'] = eje
+    resultado['valor'] = punto
+    return resultado
 
 
 def ejecutar_sonar(tablero, informacion, eje, indice, municion_jugador):
-    # 1. Validar que el índice del plano exista en el cubo
-    if indice < 0 or indice >= len(tablero):
-        print("ERROR - INDICE FUERA DEL TABLERO")
-        return None
+    """Recibe un valor desde 1, descuenta municion y devuelve contactos. Lanza ErrorJuego."""
+    return selec_catalogo('S', None, tablero, informacion, municion_jugador, [], eje, indice)
 
-    # 2. Llamar a la función de radar.py (tablero = tablero_atacado, informacion = matriz_rival)
-    contactos, tablero = sonar_por_planos(tablero, informacion, eje, indice)
-
-    # 3. Descontar 1 de munición al Sonar ("S")
-    descontar_municion("S", municion_jugador, 1)
-
-    print(f"Sonar ejecutado en {eje} = {indice}. Contactos detectados: {contactos}")
-
-    # Devuelve None porque no produce daño ni envía paquete de ataque a registro.py
-    return None
-
-
-# ================= MENU Y SELECCION =================
 
 def catalogo(municion_jugador=None):
-    print("\n====== CATALOGO ======")
-    for codigo in CATALOGO_ARMAS:
-        nombre = CATALOGO_ARMAS[codigo]["nombre"].upper()
-
-        if municion_jugador != None and codigo in municion_jugador:
+    """Devuelve el catalogo como texto para que el integrador lo muestre, sin excepciones."""
+    lineas = []
+    for codigo in ('T', 'R', 'C', 'S', 'L'):
+        texto = f"{codigo} - {CATALOGO_ARMAS[codigo]['nombre']}"
+        if municion_jugador is not None:
             balas = municion_jugador[codigo]
-            if balas == None:
-                texto_balas = " (ILIMITADA)"
-            else:
-                texto_balas = f" ({balas} disponibles)"
-        else:
-            texto_balas = ""
-
-        print(f"{codigo} - {nombre}{texto_balas}")
-    print("======================\n")
+            texto += ' (ilimitada)' if balas is None else f' ({balas} disponibles)'
+        lineas.append(texto)
+    return '\n'.join(lineas)
 
 
-def selec_catalogo(opcion, punto, tablero, informacion, municion_jugador):
+ARMAS = {
+    'T': celdas_torpedo,
+    'R': celdas_misilracimo,
+    'C': celdas_cargaprofundidad,
+    'S': celdas_sonar,
+    'L': celdas_barridolaser
+}
+
+
+def selec_catalogo(opcion, punto, tablero, informacion, municion_jugador, flota_rival,
+                  eje=None, indice=None):
+    """Despacha el arma y devuelve el resultado. Lanza ErrorArmamento por jugada invalida."""
+    if not isinstance(opcion, str):
+        raise ErrorArmamento('El arma debe ser una letra.')
     opcion = opcion.strip().upper()
-
-    # 1. Validar que el arma exista en el catálogo
-    if opcion not in CATALOGO_ARMAS:
-        return crear_resultado_arma(opcion, punto, "no ejecutado", [], None, "arma inexistente")
-
-    # 2. Validar que el jugador tenga munición disponible
+    if opcion not in ARMAS:
+        raise ErrorArmamento('Arma no disponible en esta entrega.')
     if not tiene_municion(opcion, municion_jugador):
-        balas_actuales = municion_jugador[opcion]
-        return crear_resultado_arma(opcion, punto, "no ejecutado", [], balas_actuales, "sin municion")
-
-    # 3. Ejecutar el arma elegida
-    match opcion:
-        case "T":
-            resultado = celdas_torpedo(tablero, punto, informacion)
-
-        case "R":
-            resultado = celdas_misilracimo(tablero, punto, informacion)
-
-        case "C":
-            resultado = celdas_cargaprofundidad(tablero, punto, informacion)
-
-        case "S":
-            eje = input("INGRESE EL EJE A ESCANEAR (Z, X o Y): ").strip().upper()
-            while eje not in ("Z", "X", "Y"):
-                print("ERROR - EJE INVALIDO")
-                eje = input("INGRESE EL EJE A ESCANEAR (Z, X o Y): ").strip().upper()
-
-            indice = int(input(f"INGRESE EL VALOR DEL PLANO {eje}: "))
-
-            # Ejecuta el sonar, descuenta la bala y corta acá con return
-            return ejecutar_sonar(tablero, informacion, eje, indice, municion_jugador)
-
-        case "L":
-            eje = input("INGRESE EL EJE QUE QUIERE ELIMINAR (Y o X): ").strip().upper()
-            while eje not in ("Y", "X"):
-                print("ERROR - EJE INVALIDO")
-                eje = input("INGRESE EL EJE QUE QUIERE ELIMINAR (Y o X): ").strip().upper()
-            resultado = celdas_barridolaser(tablero, punto, informacion, eje)
-
-        case "O":
-            print("Proxima Actualizacion")
-            resultado = crear_resultado_arma("O", punto, "no ejecutado", [], municion_jugador["O"], "no disponible")
-
-        case "G":
-            print("Proxima Actualizacion")
-            resultado = crear_resultado_arma("G", punto, "no ejecutado", [], municion_jugador["G"], "no disponible")
-
-    # 4. Descontar munición para las armas de ataque (resta 1 si fue "ejecutado", o 0 si falló)
-    consumo = resultado["consumo_municion"]
-    restantes = descontar_municion(opcion, municion_jugador, consumo)
-
-    # 5. Guardar cuántas balas quedaron en el diccionario final para registro.py
-    resultado["municion_restante"] = restantes
-
+        raise ErrorArmamento('No queda municion para esa arma.')
+    if opcion == 'S':
+        punto = indice
+    elif not en_rango(tablero, punto):
+        raise ErrorArmamento('El objetivo debe estar entre 1 y el tamano del cubo.')
+    else:
+        punto = tuple(punto)
+    resultado = ARMAS[opcion](tablero, punto, informacion, flota_rival, eje)
+    if not resultado['exito']:
+        raise ErrorArmamento(resultado['motivo'])
+    resultado['municion_restante'] = descontar_municion(opcion, municion_jugador, 1)
     return resultado
