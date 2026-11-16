@@ -1,3 +1,5 @@
+from ast import Return
+
 from radar import sonar_por_planos
 import tablero as cubo
 import flota
@@ -191,11 +193,58 @@ def ejecutar_sonar(tablero, informacion, eje, indice, municion_jugador):
     """Recibe un valor desde 1, descuenta municion y devuelve contactos. Lanza ErrorJuego."""
     return selec_catalogo('S', None, tablero, informacion, municion_jugador, [], eje, indice)
 
+def celdas_ondaexpansiva(tablero, punto, informacion, flota_rival, eje=None):
+    """Propaga una onda expansiva recursiva desde el punto y ataca los puntos alcanzados."""
+    MOVIMIENTOS = [
+        # 6 movimientos rectos (gastan 1.0)
+        [1, 0, 0, 1.0], [-1, 0, 0, 1.0],
+        [0, 1, 0, 1.0], [0, -1, 0, 1.0],
+        [0, 0, 1, 1.0], [0, 0, -1, 1.0],
+        # 12 movimientos diagonales (gastan 1.5 -> forma redonda)
+        [1, 1, 0, 1.5], [-1, 1, 0, 1.5], [0, 1, 1, 1.5], [0, 1, -1, 1.5],
+        [1, -1, 0, 1.5], [-1, -1, 0, 1.5], [0, -1, 1, 1.5], [0, -1, -1, 1.5],
+        [1, 0, 1, 1.5], [1, 0, -1, 1.5], [-1, 0, 1, 1.5], [-1, 0, -1, 1.5]
+    ]
+
+    def propagar(actual, radio, memoria=None, afectados=None):
+        if memoria is None:
+            memoria = {}
+        if afectados is None:
+            afectados = []
+
+        # 1. CASO BASE: Se acabó el radio o se salió del tablero (usa tu función en_rango)
+        if radio <= 0 or not en_rango(tablero, actual):
+            return afectados
+
+        # 2. CASO BASE: Ya pasamos por este punto con mayor o igual radio
+        if actual in memoria and memoria[actual] >= radio:
+            return afectados
+
+        # Guardamos en memoria y acumulamos la tupla en la lista
+        memoria[actual] = radio
+        if actual not in afectados:
+            afectados.append(actual)
+
+        # 3. CASO RECURSIVO: Expandimos a los vecinos
+        z, x, y = actual
+        for dx, dy, dz, costo in MOVIMIENTOS:
+            nuevo_punto = (z + dz, x + dx, y + dy)
+            propagar(nuevo_punto, radio - costo, memoria, afectados)
+
+        return afectados
+
+    # Primero juntamos todos los puntos con la recursión (radio=3.0)
+    puntos = propagar(punto, 3.0)
+    # Recién al terminar, aplicamos el ataque una sola vez (igual que tus otras armas)
+    return aplicar_celdas('O', tablero, punto, informacion, flota_rival, puntos)
+
+def celdas_torpedoguiado(tablero, punto, informacion, flota_rival, eje=None):
+    return None
 
 def catalogo(municion_jugador=None):
     """Devuelve el catalogo como texto para que el integrador lo muestre, sin excepciones."""
     lineas = []
-    for codigo in ('T', 'R', 'C', 'S', 'L'):
+    for codigo in ('T', 'R', 'C', 'S', 'L', 'O'):
         texto = f"{codigo} - {CATALOGO_ARMAS[codigo]['nombre']}"
         if municion_jugador is not None:
             balas = municion_jugador[codigo]
@@ -209,7 +258,8 @@ ARMAS = {
     'R': celdas_misilracimo,
     'C': celdas_cargaprofundidad,
     'S': celdas_sonar,
-    'L': celdas_barridolaser
+    'L': celdas_barridolaser,
+    'O': celdas_ondaexpansiva
 }
 
 

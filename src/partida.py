@@ -376,7 +376,7 @@ def pedir_disparo(estado):
     """Pide un arma y sus datos y ejecuta la jugada. lanza ErrorJuego si no puede disparar"""
     jugador = obtener_jugador_actual(estado)
     print(armamento.catalogo(jugador['municion']))
-    arma = leer_opcion('Arma (T/R/C/S/L): ', r'[TtRrCcSsLl]').upper()
+    arma = leer_opcion('Arma (T/R/C/S/L/O): ', r'[TtRrCcSsLlOo]').upper()
     if not armamento.tiene_municion(arma, jugador['municion']):
         raise TurnoInvalidoError('No queda municion para esa arma')
     jugada = {'arma': arma}
