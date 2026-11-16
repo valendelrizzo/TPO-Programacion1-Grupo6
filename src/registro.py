@@ -99,3 +99,14 @@ def cargar_partida(nombre):
 def listar_partidas():
     """Lanza ErrorRegistro: el listado de partidas corresponde a la entrega 3"""
     raise ErrorRegistro('Listar partidas corresponde a la entrega 3.')
+
+def obtener_ultimo_impacto_activo(estado, nombre_jugador, tablero_rival):
+    """Recorre el historial de atras hacia adelante y devuelve el ultimo punto impactado cuya nave no este hundida."""
+    for jugada in reversed(estado.get('historial', [])):
+        if jugada.get('jugador') == nombre_jugador:
+            for celda in reversed(jugada.get('celdas', [])):
+                punto = celda.get('punto')
+                # Verificamos que haya sido impacto y que en el tablero actual siga como IMPACTO (no HUNDIDO)
+                if celda.get('resultado') == tablero.IMPACTO and tablero.leer_celda(tablero_rival, punto) == tablero.IMPACTO:
+                    return punto
+    return None

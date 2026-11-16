@@ -376,13 +376,18 @@ def pedir_disparo(estado):
     """Pide un arma y sus datos y ejecuta la jugada. lanza ErrorJuego si no puede disparar"""
     jugador = obtener_jugador_actual(estado)
     print(armamento.catalogo(jugador['municion']))
-    arma = leer_opcion('Arma (T/R/C/S/L/O): ', r'[TtRrCcSsLlOo]').upper()
+    arma = leer_opcion('Arma (T/R/C/S/L/O/G): ', r'[TtRrCcSsLlOoGg]').upper()
     if not armamento.tiene_municion(arma, jugador['municion']):
         raise TurnoInvalidoError('No queda municion para esa arma')
     jugada = {'arma': arma}
     if arma == 'S':
         jugada['eje'] = leer_opcion('Eje (z/x/y): ', r'[zZxXyY]').lower()
         jugada['valor'] = leer_entero('Valor: ', 1, estado['tamano_cubo'])
+    elif arma == 'G':
+        ultimo_punto = registro.obtener_ultimo_impacto_activo(estado, jugador['nombre'], jugador['tablero_atacado'])
+        if ultimo_punto is None:
+            raise TurnoInvalidoError('No hay impactos previos en una nave sin hundir.')
+        jugada['objetivo'] = ultimo_punto 
     else:
         jugada['objetivo'] = leer_punto(jugador['tablero_atacado'])
         if arma == 'L':

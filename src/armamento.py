@@ -1,5 +1,4 @@
 from ast import Return
-
 from radar import sonar_por_planos
 import tablero as cubo
 import flota
@@ -239,12 +238,43 @@ def celdas_ondaexpansiva(tablero, punto, informacion, flota_rival, eje=None):
     return aplicar_celdas('O', tablero, punto, informacion, flota_rival, puntos)
 
 def celdas_torpedoguiado(tablero, punto, informacion, flota_rival, eje=None):
-    return None
+    """Busca recursivamente una celda sana contigua de la nave impactada y dispara."""
+    VECINOS = [
+        [1, 0, 0], [-1, 0, 0],
+        [0, 1, 0], [0, -1, 0],
+        [0, 0, 1], [0, 0, -1]
+    ]
+
+    nave = flota.obtener_nave_en_punto(flota_rival, punto)
+
+    def buscar_vecina(actual, visitados=None):
+        if visitados is None:
+            visitados = []
+
+        if actual in visitados or actual not in nave['celdas']:
+            return None
+
+        visitados.append(actual)
+
+        if cubo.leer_celda(tablero, actual) != cubo.IMPACTO:
+            return actual
+
+        z, x, y = actual
+        for dz, dx, dy in VECINOS:
+            vecino = (z + dz, x + dx, y + dy)
+            objetivo = buscar_vecina(vecino, visitados)
+            if objetivo is not None:
+                return objetivo
+
+        return None
+
+    celda_objetivo = buscar_vecina(punto)
+    return aplicar_celdas('G', tablero, punto, informacion, flota_rival, [celda_objetivo])
 
 def catalogo(municion_jugador=None):
     """Devuelve el catalogo como texto para que el integrador lo muestre, sin excepciones."""
     lineas = []
-    for codigo in ('T', 'R', 'C', 'S', 'L', 'O'):
+    for codigo in ('T', 'R', 'C', 'S', 'L', 'O', 'G'):
         texto = f"{codigo} - {CATALOGO_ARMAS[codigo]['nombre']}"
         if municion_jugador is not None:
             balas = municion_jugador[codigo]
@@ -259,7 +289,8 @@ ARMAS = {
     'C': celdas_cargaprofundidad,
     'S': celdas_sonar,
     'L': celdas_barridolaser,
-    'O': celdas_ondaexpansiva
+    'O': celdas_ondaexpansiva,
+    'G': celdas_torpedoguiado
 }
 
 
