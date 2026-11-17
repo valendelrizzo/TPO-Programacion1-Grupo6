@@ -113,7 +113,7 @@ def crear_indice_naves(cubo):
                 if letra in TIPOS_NAVE:
                     if letra not in indice:
                         indice[letra] = []
-                    indice[letra].append((z + 1, x + 1, y + 1))
+                    indice[letra].append([z + 1, x + 1, y + 1])
     return indice
 
 

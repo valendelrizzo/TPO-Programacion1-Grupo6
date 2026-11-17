@@ -158,7 +158,7 @@ def celdas_cargaprofundidad(tablero, punto, informacion, flota_rival, eje=None):
     z, x, y = punto
     puntos = []
     for valor in range(1, len(tablero) + 1):
-        puntos.append((valor, x, y))
+        puntos.append([valor, x, y])
     return aplicar_celdas('C', tablero, punto, informacion, flota_rival, puntos)
 
 
@@ -170,9 +170,9 @@ def celdas_barridolaser(tablero, punto, informacion, flota_rival, eje):
     puntos = []
     for valor in range(1, len(tablero) + 1):
         if eje == 'x':
-            puntos.append((z, valor, y))
+            puntos.append([z, valor, y])
         else:
-            puntos.append((z, x, valor))
+            puntos.append([z, x, valor])
     return aplicar_celdas('L', tablero, punto, informacion, flota_rival, puntos)
 
 
@@ -207,7 +207,8 @@ def celdas_ondaexpansiva(tablero, punto, informacion, flota_rival, eje=None):
 
     def propagar(actual, radio, memoria=None, afectados=None):
         if memoria is None:
-            memoria = {}
+            memoria = [[[0 for _ in range(len(tablero))] for _ in range(len(tablero))]
+                       for _ in range(len(tablero))]
         if afectados is None:
             afectados = []
 
@@ -216,18 +217,18 @@ def celdas_ondaexpansiva(tablero, punto, informacion, flota_rival, eje=None):
             return afectados
 
         # 2. CASO BASE: Ya pasamos por este punto con mayor o igual radio
-        if actual in memoria and memoria[actual] >= radio:
+        z, x, y = actual
+        if memoria[z - 1][x - 1][y - 1] >= radio:
             return afectados
 
-        # Guardamos en memoria y acumulamos la tupla en la lista
-        memoria[actual] = radio
+        # Guardamos en memoria y acumulamos la coordenada en la lista
+        memoria[z - 1][x - 1][y - 1] = radio
         if actual not in afectados:
             afectados.append(actual)
 
         # 3. CASO RECURSIVO: Expandimos a los vecinos
-        z, x, y = actual
         for dx, dy, dz, costo in MOVIMIENTOS:
-            nuevo_punto = (z + dz, x + dx, y + dy)
+            nuevo_punto = [z + dz, x + dx, y + dy]
             propagar(nuevo_punto, radio - costo, memoria, afectados)
 
         return afectados
@@ -261,7 +262,7 @@ def celdas_torpedoguiado(tablero, punto, informacion, flota_rival, eje=None):
 
         z, x, y = actual
         for dz, dx, dy in VECINOS:
-            vecino = (z + dz, x + dx, y + dy)
+            vecino = [z + dz, x + dx, y + dy]
             objetivo = buscar_vecina(vecino, visitados)
             if objetivo is not None:
                 return objetivo
@@ -309,7 +310,7 @@ def selec_catalogo(opcion, punto, tablero, informacion, municion_jugador, flota_
     elif not en_rango(tablero, punto):
         raise ErrorArmamento('El objetivo debe estar entre 1 y el tamano del cubo.')
     else:
-        punto = tuple(punto)
+        punto = list(punto)
     resultado = ARMAS[opcion](tablero, punto, informacion, flota_rival, eje)
     if not resultado['exito']:
         raise ErrorArmamento(resultado['motivo'])

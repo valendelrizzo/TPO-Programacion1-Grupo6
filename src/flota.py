@@ -47,7 +47,7 @@ CATALOGO_NAVES = {
     'E': {
         'nombre': 'Estacion orbital',
         'tamano': 8,
-        'dimensiones': (2, 2, 2),
+        'dimensiones': [2, 2, 2],
         'cantidad': 1,
         'forma': 'bloque',
         'regla': 'no_caras_exteriores',
@@ -134,9 +134,6 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
     # =========================================================================
     # PARTE 2: Validar superposicion y separacion (al menos 1 celda libre alrededor)
     # =========================================================================
-    # lista de celdas a un conjunto para busquedas rapidas
-    conjunto_celdas_propias = set(celdas)
-
     # Los desplazamientos posibles respecto a una celda: -1 (atras), 0 (mismo lugar), +1 (adelante)
     desplazamientos = [-1, 0, 1]
 
@@ -157,9 +154,9 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
                                      1 <= vecino_y <= tamano_cubo)
 
                     if vecino_dentro:
-                        coordenada_vecina = (vecino_z, vecino_x, vecino_y)
+                        coordenada_vecina = [vecino_z, vecino_x, vecino_y]
 
-                        if coordenada_vecina not in conjunto_celdas_propias:
+                        if coordenada_vecina not in celdas:
                             
                             contenido = cubo[vecino_z - 1][vecino_x - 1][vecino_y - 1]
 
@@ -173,16 +170,16 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
     return True
 
 def parsear_punto(punto):
-    """Devuelve una tupla de enteros desde texto o secuencia. Lanza UbicacionInvalidaError"""
+    """Devuelve una lista de enteros desde texto o secuencia. Lanza UbicacionInvalidaError"""
     if isinstance(punto, str):
         patron = r'\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*'
         coincidencia = re.fullmatch(patron, punto)
         if coincidencia:
-            return (int(coincidencia.group(1)), int(coincidencia.group(2)),
-                    int(coincidencia.group(3)))
+            return [int(coincidencia.group(1)), int(coincidencia.group(2)),
+                    int(coincidencia.group(3))]
     elif isinstance(punto, (tuple, list)) and len(punto) == 3:
         if all(type(valor) == int for valor in punto):
-            return tuple(punto)
+            return list(punto)
     raise UbicacionInvalidaError('El punto debe tener el formato z,x,y con enteros.')
 
 
@@ -268,7 +265,7 @@ def generar_celdas_nave(tipo_nave, p_desde, p_hasta):
         actual_y = y_inicio
 
         for _ in range(tamano_requerido):
-            celda = (actual_z, actual_x, actual_y)
+            celda = [actual_z, actual_x, actual_y]
             celdas_ocupadas.append(celda)
 
             # Avanzamos un paso en la direccion correspondiente
@@ -309,7 +306,7 @@ def generar_celdas_nave(tipo_nave, p_desde, p_hasta):
         for z in range(min_z, max_z + 1):
             for x in range(min_x, max_x + 1):
                 for y in range(min_y, max_y + 1):
-                    celda = (z, x, y)
+                    celda = [z, x, y]
                     celdas_ocupadas.append(celda)
 
         return celdas_ocupadas
@@ -345,8 +342,8 @@ def ubicar_nave(cubo, flota, nave, puntoD, puntoH):
         'tipo': nave,
         'nombre': CATALOGO_NAVES[nave]['nombre'],
         'celdas': celdas,
-        'impactos': set(),
-        'impactos_por_celda': {},
+        'impactos': [],
+        'impactos_por_celda': [],  # Una coordenada por impacto; admite repetidas.
         'hundida': False
     })
 
@@ -415,8 +412,8 @@ def ubicacion_automatica(cubo, catalogo=None, semilla=None):
                         z_inicio = generador.randint(2, tamano_cubo - 2)
                         x_inicio = generador.randint(2, tamano_cubo - 2)
                         y_inicio = generador.randint(2, tamano_cubo - 2)
-                        p_desde = (z_inicio, x_inicio, y_inicio)
-                        p_hasta = (z_inicio + 1, x_inicio + 1, y_inicio + 1)
+                        p_desde = [z_inicio, x_inicio, y_inicio]
+                        p_hasta = [z_inicio + 1, x_inicio + 1, y_inicio + 1]
                     else:
                         tamano_nave = catalogo[tipo]['tamano']
                         eje_elegido = generador.choice(['z', 'x', 'y'])
@@ -470,8 +467,8 @@ def ubicacion_automatica(cubo, catalogo=None, semilla=None):
                             y_fin = y_inicio + tamano_nave - 1
                             x_inicio = x_fin = generador.randint(1, tamano_cubo)
 
-                        p_desde = (z_inicio, x_inicio, y_inicio)
-                        p_hasta = (z_fin, x_fin, y_fin)
+                        p_desde = [z_inicio, x_inicio, y_inicio]
+                        p_hasta = [z_fin, x_fin, y_fin]
 
                     try:
                         ubicar_nave(cubo, flota_actual, tipo, p_desde, p_hasta)
@@ -519,12 +516,12 @@ def nave_esta_hundida(nave):
     Otras naves: Cada celda requiere 1 impacto.
     
     """
-    impactos_por_celda = nave.get('impactos_por_celda', {})
+    impactos_por_celda = nave.get('impactos_por_celda', [])
     tipo = nave['tipo']
     impactos_necesarios = 2 if tipo == 'P' else 1
 
     for celda in nave['celdas']:
-        impactos_en_esta_celda = impactos_por_celda.get(celda, 0)
+        impactos_en_esta_celda = impactos_por_celda.count(celda)
         if impactos_en_esta_celda < impactos_necesarios:
             return False
 
@@ -568,13 +565,13 @@ def registrar_impacto(flota, punto):
             "efecto_especial": None
         }
 
-    # Inicializamos diccionarios de impactos si no estuvieran presentes
+    # Inicializamos listas de impactos si no estuvieran presentes
     if 'impactos' not in nave:
-        nave['impactos'] = set()
+        nave['impactos'] = []
     if 'impactos_por_celda' not in nave:
-        nave['impactos_por_celda'] = {}
+        nave['impactos_por_celda'] = []
 
-    impactos_actuales = nave['impactos_por_celda'].get(coordenada, 0)
+    impactos_actuales = nave['impactos_por_celda'].count(coordenada)
     tipo = nave['tipo']
     impactos_maximos_celda = 2 if tipo == 'P' else 1
 
@@ -589,8 +586,9 @@ def registrar_impacto(flota, punto):
         }
 
     # 3. Caso: Impacto exitoso sobre la celda
-    nave['impactos'].add(coordenada)
-    nave['impactos_por_celda'][coordenada] = impactos_actuales + 1
+    if coordenada not in nave['impactos']:
+        nave['impactos'].append(coordenada)
+    nave['impactos_por_celda'].append(coordenada)
 
     # Efecto especial del Destructor ('D'): Al ser impactada revela una celda ocupada del rival
     efecto_especial = None
@@ -614,7 +612,7 @@ def registrar_impacto(flota, punto):
         }
 
     # Si la nave recibio un impacto pero aun no esta hundida (averiada)
-    celdas_impactadas = sum(nave['impactos_por_celda'].values())
+    celdas_impactadas = len(nave['impactos_por_celda'])
     total_celdas = len(nave['celdas']) * impactos_maximos_celda
 
     return {

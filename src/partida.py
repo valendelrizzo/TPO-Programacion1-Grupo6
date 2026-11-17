@@ -1,8 +1,10 @@
+#!/usr/bin/python
 import re
 import tablero
 import flota
 import radar
 import armamento
+import guardado
 import registro
 import random
 
@@ -66,14 +68,7 @@ def nueva_partida_1v1(configuracion):
         "dificultad": None,
         "jugador1": jugador1,
         "jugador2": jugador2,
-        "historial": [],
-
-        # Claves de compatibilidad directa con versiones previas
-        #TODO: y esto? REVISAR
-        "tableroPropio1": jugador1["tablero_propio"],
-        "tableroAtacado1": jugador1["tablero_atacado"],
-        "tableroPropio2": jugador2["tablero_propio"],
-        "tableroAtacado2": jugador2["tablero_atacado"]
+        "historial": []
     }
     return partida
 
@@ -92,7 +87,7 @@ def nueva_partida_maquina_vs_maquina(configuracion, dificultades=("facil", "faci
     """Devuelve un estado entre maquinas sin ubicar flotas. Lanza ErrorTablero por tamano"""
     partida = nueva_partida_vs_maquina(configuracion)
     partida['tipo_partida'] = 'maquina_vs_maquina'
-    partida['dificultad'] = dificultades
+    partida['dificultad'] = list(dificultades)
     partida['jugador1']['nombre'] = 'Maquina 1'
     partida['jugador1']['tipo'] = 'maquina'
     partida['jugador2']['nombre'] = 'Maquina 2'
@@ -226,14 +221,14 @@ def turno_maquina(estado):
     for z in range(1,estado['tamano_cubo']+1):
         for x in range(1,estado['tamano_cubo']+1):
             for y in range(1,estado['tamano_cubo']+1):
-                punto=(z,x,y)
+                punto=[z,x,y]
                 marca=tablero.leer_celda(atacante['tablero_atacado'],punto)
                 if marca in(tablero.AGUA_SIN_EXPLORAR,tablero.DETECTADO):
                     celdas_disponibles.append(punto)
                 elif marca==tablero.IMPACTO:
                     nave=flota.obtener_nave_en_punto(defensor['flota'],punto)
                     if nave is not None and nave['tipo']=='P':
-                        if nave['impactos_por_celda'].get(punto,0)<2:
+                        if nave['impactos_por_celda'].count(punto)<2:
                             celdas_disponibles.append(punto)
     if not celdas_disponibles:
         raise TurnoInvalidoError('No quedan celdas para disparar')
@@ -268,7 +263,7 @@ def maquinaLevelImposible(estado):
                 return actual
             z, x, y = actual
             for dz, dx, dy in VECINOS:
-                objetivo = buscar_vecina((z + dz, x + dx, y + dy), visitados)
+                objetivo = buscar_vecina([z + dz, x + dx, y + dy], visitados)
                 if objetivo is not None:
                     return objetivo
             return None
@@ -281,7 +276,7 @@ def maquinaLevelImposible(estado):
     for z in range(1, estado['tamano_cubo'] + 1):
         for x in range(1, estado['tamano_cubo'] + 1):
             for y in range(1, estado['tamano_cubo'] + 1):
-                punto = (z, x, y)
+                punto = [z, x, y]
                 marca = tablero.leer_celda(atacante['tablero_atacado'], punto)
                 if marca in (tablero.AGUA_SIN_EXPLORAR, tablero.DETECTADO):
                     celdas_disponibles.append(punto)
@@ -324,7 +319,7 @@ def leer_entero(mensaje,minimo,maximo=None,predeterminado=None):
 
 
 def leer_punto(cubo):
-    """Pide z,x,y y devuelve una tupla valida desde 1. Repite ante datos invalidos"""
+    """Pide z,x,y y devuelve una lista valida desde 1. Repite ante datos invalidos"""
     while True:
         try:
             punto=flota.parsear_punto(input('Objetivo(z,x,y): '))
@@ -453,12 +448,10 @@ def informar_guardado(estado):
 
 
 def jugar_partida(estado):
-    """Prepara flotas, alterna turnos hasta la victoria y muestra el resumen final"""
-    preparar_flotas(estado)
-    if leer_opcion('Iniciar partida? (s/n): ', r'[sSnN]').lower() == 'n':
-        return
-    acciones = {'1': pedir_disparo, '2': mostrar_cubo, '3': informar_guardado, '4': ejecucion_radar, '5': mostrar_estadisticas}
-    
+    """Continua el estado recibido, alterna turnos y muestra el resumen final"""
+    acciones={'1':pedir_disparo,'2':mostrar_cubo,'3':guardado.guardarPartida,
+              '4':ejecucion_radar,'5':mostrar_estadisticas}
+
     # Diccionario para despachar la IA segun la dificultad elegida
     ia_maquina = {
         'facil': turno_maquina,
@@ -491,13 +484,16 @@ def comenzar_partida(crear, dificultad=None):
     """Pide el tamano del cubo e inicia una partida con la funcion recibida"""
     print('El tamano por defecto es 8. el portaaviones necesita al menos 5')
     tamano = leer_entero('Tamano del cubo (Enter para 8): ', 5, predeterminado=configuracionG['tamano'])
-    
+
     # Si se paso una dificultad, se la mandamos a la funcion creadora
     if dificultad is not None:
         estado = crear({'tamano': tamano}, dificultad)
     else:
         estado = crear({'tamano': tamano})
-        
+
+    preparar_flotas(estado)
+    if leer_opcion('Iniciar partida? (s/n): ', r'[sSnN]').lower() == 'n':
+        return
     jugar_partida(estado)
 
 
@@ -519,11 +515,6 @@ def informar_maquinas():
     print('entrega 3')
 
 
-def informar_carga():
-    """Informa el alcance de la carga de partidas en esta entrega"""
-    print('entrega 3')
-
-
 def salir():
     """Muestra la salida del programa y devuelve 0"""
     print('chauchis')
@@ -531,19 +522,22 @@ def salir():
 
 
 def main():
+    guardado.cargarEstadoGlobal()
     """Muestra el menu principal y ejecuta una opcion. Devuelve 0 al salir o 1 para continuar"""
     print('===== OPERACION CUBO =====')
     print('1 - Partida uno contra uno\n2 - Partida uno contra la maquina')
     print('3 - Partida maquina contra maquina\n4 - Continuar una partida guardada\n5 - Salir')
     acciones = {'1': iniciar_1v1, '2': iniciar_vs_maquina, '3': informar_maquinas,
-                '4': informar_carga, '5': salir}
+                '4': guardado.cargarPartida, '5': salir}
     try:
         opcion = leer_opcion('Opcion: ', r'[1-5]')
         resultado = acciones[opcion]()
     except (tablero.ErrorJuego, ValueError) as error:
         print(error)
     else:
-        if resultado == 0:
+        if isinstance(resultado,dict):
+            jugar_partida(resultado['partida'])
+        elif resultado == 0:
             return 0
     finally:
         print()
