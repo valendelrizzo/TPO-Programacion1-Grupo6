@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+datos/datosGlobales.json
 
 requirements.txt
 pytest.ini

@@ -95,8 +95,8 @@ def vecinos(cubo,punto):
   """Devuelve hasta seis vecinos ortogonales desde 1. Lanza ErrorTablero si no existe."""
   leer_celda(cubo,punto)
   z,x,y=punto
-  candidatos=[(z+1,x,y),(z-1,x,y),(z,x+1,y),
-(z,x-1,y),(z,x,y+1),(z,x,y-1)]
+  candidatos=[[z+1,x,y],[z-1,x,y],[z,x+1,y],
+[z,x-1,y],[z,x,y+1],[z,x,y-1]]
   resultado=[]
   for candidato in candidatos:
     if validar_punto(cubo,candidato):
