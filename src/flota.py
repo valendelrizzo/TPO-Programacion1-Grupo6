@@ -134,6 +134,7 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
     # =========================================================================
     # PARTE 2: Validar superposicion y separacion (al menos 1 celda libre alrededor)
     # =========================================================================
+    conjunto_celdas_propias = {tuple(celda) for celda in celdas}
     # Los desplazamientos posibles respecto a una celda: -1 (atras), 0 (mismo lugar), +1 (adelante)
     desplazamientos = [-1, 0, 1]
 
@@ -154,13 +155,13 @@ def validar_reglas_ubicacion(cubo, tipo_nave, celdas):
                                      1 <= vecino_y <= tamano_cubo)
 
                     if vecino_dentro:
-                        coordenada_vecina = [vecino_z, vecino_x, vecino_y]
+                        coordenada_vecina = (vecino_z, vecino_x, vecino_y)
 
-                        if coordenada_vecina not in celdas:
+                        if coordenada_vecina not in conjunto_celdas_propias:
                             
                             contenido = cubo[vecino_z - 1][vecino_x - 1][vecino_y - 1]
 
-                            if contenido not in ('~', 'o', 0, ' '):
+                            if contenido not in (tablero.AGUA_SIN_EXPLORAR, tablero.AGUA_MARCADA, 0, ' '):
                                 raise UbicacionInvalidaError(
                                     f"No se puede ubicar la nave aca: la posicion ({vecino_z}, {vecino_x}, {vecino_y}) "
                                     f"ya esta ocupada por otra nave o esta a menos de una celda de distancia."
@@ -493,15 +494,33 @@ def ubicacion_automatica(cubo, catalogo=None, semilla=None):
     raise UbicacionInvalidaError("No se pudo ubicar la flota automaticamente tras multiples intentos.")
 
 
+def obtener_conjunto_celdas(nave):
+    """Devuelve el conjunto (set) de puntos (z, x, y) como tuplas que ocupa una nave."""
+    return {tuple(celda) for celda in nave.get('celdas', [])}
+
+
+def obtener_conjunto_impactos(nave):
+    """Devuelve el conjunto (set) de puntos (z, x, y) impactados en una nave."""
+    return {tuple(celda) for celda in nave.get('impactos', [])}
+
+
+def obtener_puntos_ocupados(flota):
+    """Devuelve el conjunto (set) de todos los puntos (z, x, y) ocupados por toda la flota."""
+    puntos = set()
+    for nave in (flota or []):
+        puntos |= obtener_conjunto_celdas(nave)
+    return puntos
+
+
 def obtener_nave_en_punto(flota, punto):
     """
     Busca si alguna nave de la flota ocupa la coordenada 'punto'.
-    
+    Utiliza un conjunto de puntos (z, x, y) para verificar pertenencia.
     """
-    coordenada = parsear_punto(punto)
+    coordenada = tuple(parsear_punto(punto))
 
-    for nave in flota:
-        if coordenada in nave['celdas']:
+    for nave in (flota or []):
+        if coordenada in obtener_conjunto_celdas(nave):
             return nave
 
     return None
@@ -516,11 +535,11 @@ def nave_esta_hundida(nave):
     Otras naves: Cada celda requiere 1 impacto.
     
     """
-    impactos_por_celda = nave.get('impactos_por_celda', [])
+    impactos_por_celda = [tuple(c) for c in nave.get('impactos_por_celda', [])]
     tipo = nave['tipo']
     impactos_necesarios = 2 if tipo == 'P' else 1
 
-    for celda in nave['celdas']:
+    for celda in obtener_conjunto_celdas(nave):
         impactos_en_esta_celda = impactos_por_celda.count(celda)
         if impactos_en_esta_celda < impactos_necesarios:
             return False
@@ -571,7 +590,7 @@ def registrar_impacto(flota, punto):
     if 'impactos_por_celda' not in nave:
         nave['impactos_por_celda'] = []
 
-    impactos_actuales = nave['impactos_por_celda'].count(coordenada)
+    impactos_actuales = [tuple(c) for c in nave['impactos_por_celda']].count(tuple(coordenada))
     tipo = nave['tipo']
     impactos_maximos_celda = 2 if tipo == 'P' else 1
 
@@ -586,9 +605,9 @@ def registrar_impacto(flota, punto):
         }
 
     # 3. Caso: Impacto exitoso sobre la celda
-    if coordenada not in nave['impactos']:
-        nave['impactos'].append(coordenada)
-    nave['impactos_por_celda'].append(coordenada)
+    if tuple(coordenada) not in obtener_conjunto_impactos(nave):
+        nave['impactos'].append(list(coordenada))
+    nave['impactos_por_celda'].append(list(coordenada))
 
     # Efecto especial del Destructor ('D'): Al ser impactada revela una celda ocupada del rival
     efecto_especial = None
@@ -622,3 +641,76 @@ def registrar_impacto(flota, punto):
         "mensaje": f"Impacto. {nave['nombre']} averiado ({celdas_impactadas} de {total_celdas}).",
         "efecto_especial": efecto_especial
     }
+
+
+def datos_flota_para_guardar(flota):
+    """
+    Devuelve una copia serializable a JSON de los datos de la flota
+    (convirtiendo conjuntos o tuplas de coordenadas a listas).
+    """
+    if not flota:
+        return []
+    datos = []
+    for nave in flota:
+        tipo = nave['tipo']
+        celdas = [list(parsear_punto(c)) for c in nave.get('celdas', [])]
+        impactos = [list(parsear_punto(c)) for c in nave.get('impactos', [])]
+        raw_por_celda = nave.get('impactos_por_celda', [])
+        if isinstance(raw_por_celda, dict):
+            impactos_por_celda = []
+            for clave, cantidad in raw_por_celda.items():
+                punto = list(parsear_punto(clave))
+                for _ in range(int(cantidad)):
+                    impactos_por_celda.append(punto)
+        else:
+            impactos_por_celda = [list(parsear_punto(c)) for c in raw_por_celda]
+        datos.append({
+            'tipo': tipo,
+            'nombre': nave.get('nombre', CATALOGO_NAVES.get(tipo, {}).get('nombre', tipo)),
+            'celdas': celdas,
+            'impactos': impactos,
+            'impactos_por_celda': impactos_por_celda,
+            'hundida': bool(nave.get('hundida', False))
+        })
+    return datos
+
+
+def reponer_flota(cubo, datos_flota):
+    """
+    Reconstruye la estructura de la flota a partir de los datos guardados y
+    repone las naves en el cubo recibido. Devuelve (cubo, flota_repuesta).
+    Lanza UbicacionInvalidaError si algun dato o punto es invalido.
+    """
+    flota_repuesta = []
+    for item in (datos_flota or []):
+        tipo = item.get('tipo')
+        if tipo not in CATALOGO_NAVES:
+            raise UbicacionInvalidaError(f"Tipo de nave '{tipo}' no reconocido al reponer la flota.")
+        celdas = [list(parsear_punto(c)) for c in item.get('celdas', [])]
+        impactos = [list(parsear_punto(c)) for c in item.get('impactos', [])]
+        raw_por_celda = item.get('impactos_por_celda', [])
+        if isinstance(raw_por_celda, dict):
+            impactos_por_celda = []
+            for clave, cantidad in raw_por_celda.items():
+                punto = list(parsear_punto(clave))
+                for _ in range(int(cantidad)):
+                    impactos_por_celda.append(punto)
+        else:
+            impactos_por_celda = [list(parsear_punto(c)) for c in raw_por_celda]
+        nave = {
+            'tipo': tipo,
+            'nombre': item.get('nombre', CATALOGO_NAVES[tipo]['nombre']),
+            'celdas': celdas,
+            'impactos': impactos,
+            'impactos_por_celda': impactos_por_celda,
+            'hundida': bool(item.get('hundida', False))
+        }
+        nave['hundida'] = nave['hundida'] or nave_esta_hundida(nave)
+        if cubo is not None:
+            for punto in celdas:
+                if not tablero.validar_punto(cubo, punto):
+                    raise UbicacionInvalidaError(f"El punto {punto} queda fuera del cubo al reponer la flota.")
+                if tablero.leer_celda(cubo, punto) == tablero.AGUA_SIN_EXPLORAR:
+                    tablero.escribir_celda(cubo, punto, tipo)
+        flota_repuesta.append(nave)
+    return cubo, flota_repuesta

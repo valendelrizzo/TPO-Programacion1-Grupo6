@@ -4,7 +4,6 @@ import tablero
 import flota
 import radar
 import armamento
-import guardado
 import registro
 import random
 
@@ -42,7 +41,7 @@ def crear_estructura_jugador(nombre, tipo, tamano_cubo):
         "nombre": nombre,
         "tipo": tipo,
         "tablero_propio": tablero.crear_tablero(tamano_cubo),
-        "tablero_atacado": tablero.crear_tablero(tamano_cubo, '~'),
+        "tablero_atacado": tablero.crear_tablero(tamano_cubo, tablero.AGUA_SIN_EXPLORAR),
         "flota": [],
         "municion": armamento.crear_municion_jugador(),
         "indice_naves": {}
@@ -167,9 +166,9 @@ def aplicar_efectos_especiales(resultado, atacante, defensor):
                         revelada = True
         elif efecto=='otorgar_municion_extra':
             #la consigna dice que dar asi que doy uno de cada arma que tiene usos limitados
-            for arma in ('R','C','S','L'):
+            for arma in ('R','C','S','L','O','G'):
                 atacante['municion'][arma]+=1
-            mensajes.append('La estacion hundida otorga una municion extra a todas als armas.')
+            mensajes.append('La estacion hundida otorga una municion extra a todas las armas.')
     return mensajes
 
 
@@ -185,7 +184,7 @@ def ejecutar_turno(estado,jugada):
     objetivo=jugada.get('objetivo')
     if objetivo is not None:
         objetivo=flota.parsear_punto(objetivo)
-    resultado=armamento.selec_catalogo(
+    resultado=armamento.disparar_arma(
         arma,objetivo,atacante['tablero_atacado'],defensor['tablero_propio'],
         atacante['municion'],defensor['flota'],jugada.get('eje'),jugada.get('valor'))
     mensajes=[]
@@ -211,8 +210,24 @@ def ejecutar_turno(estado,jugada):
 
 armas_opciones = ['T','R','C','O']
 
+
+def obtener_armas_disponibles_maquina(municion):
+    """Filtra las armas de armas_opciones que tienen municion disponible."""
+    disponibles = [arma for arma in armas_opciones if armamento.tiene_municion(arma, municion)]
+    return disponibles if disponibles else ['T']
+
+
+def obtener_dificultad_actual(estado):
+    """Devuelve la dificultad ('facil' o 'imposible') para el jugador maquina del turno actual."""
+    dificultad = estado.get('dificultad', 'facil')
+    if isinstance(dificultad, (list, tuple)):
+        indice = 0 if estado.get('turno_actual') == 'jugador1' else 1
+        return dificultad[indice] if indice < len(dificultad) else 'facil'
+    return dificultad or 'facil'
+
+
 def turno_maquina(estado):
-    """Elige un torpedo valido y devuelve el estado actualizado. Lanza TurnoInvalidoError si falla"""
+    """Elige un disparo valido con municion disponible y devuelve el estado actualizado. Lanza TurnoInvalidoError si falla"""
     atacante=obtener_jugador_actual(estado)
     defensor=obtener_jugador_rival(estado)
     if atacante['tipo'] !='maquina':
@@ -232,7 +247,9 @@ def turno_maquina(estado):
                             celdas_disponibles.append(punto)
     if not celdas_disponibles:
         raise TurnoInvalidoError('No quedan celdas para disparar')
-    return ejecutar_turno(estado,{'arma': random.choice(armas_opciones),'objetivo': random.choice(celdas_disponibles)})
+    armas_validas = obtener_armas_disponibles_maquina(atacante['municion'])
+    return ejecutar_turno(estado,{'arma': random.choice(armas_validas),'objetivo': random.choice(celdas_disponibles)})
+
 
 def maquinaLevelImposible(estado):
     """Elige una celda contigua a una nave herida de forma recursiva; si no hay, dispara al azar."""
@@ -241,6 +258,7 @@ def maquinaLevelImposible(estado):
     if atacante['tipo'] != 'maquina':
         raise TurnoInvalidoError('El turno actual no es de la maquina.')
 
+    armas_validas = obtener_armas_disponibles_maquina(atacante['municion'])
     ultimo_punto = registro.obtener_ultimo_impacto_activo(
         estado, atacante['nombre'], atacante['tablero_atacado']
     )
@@ -270,7 +288,11 @@ def maquinaLevelImposible(estado):
 
         objetivo = buscar_vecina(ultimo_punto)
         if objetivo is not None:
-            return ejecutar_turno(estado, {'arma': random.choice(armas_opciones), 'objetivo': objetivo})
+            return ejecutar_turno(estado, {'arma': random.choice(armas_validas), 'objetivo': objetivo})
+
+    mejor_punto, _, _ = radar.mejor_objetivo_probabilidad(atacante['tablero_atacado'], defensor['flota'])
+    if mejor_punto is not None:
+        return ejecutar_turno(estado, {'arma': random.choice(armas_validas), 'objetivo': mejor_punto})
 
     celdas_disponibles = []
     for z in range(1, estado['tamano_cubo'] + 1):
@@ -280,10 +302,15 @@ def maquinaLevelImposible(estado):
                 marca = tablero.leer_celda(atacante['tablero_atacado'], punto)
                 if marca in (tablero.AGUA_SIN_EXPLORAR, tablero.DETECTADO):
                     celdas_disponibles.append(punto)
+                elif marca == tablero.IMPACTO:
+                    nave = flota.obtener_nave_en_punto(defensor['flota'], punto)
+                    if nave is not None and nave['tipo'] == 'P':
+                        if nave['impactos_por_celda'].count(punto) < 2:
+                            celdas_disponibles.append(punto)
     if not celdas_disponibles:
         raise TurnoInvalidoError('No quedan celdas para disparar')
 
-    return ejecutar_turno(estado, {'arma': random.choice(armas_opciones), 'objetivo': random.choice(celdas_disponibles)})
+    return ejecutar_turno(estado, {'arma': random.choice(armas_validas), 'objetivo': random.choice(celdas_disponibles)})
 
 configuracionG={'tamano':8}
 
@@ -398,16 +425,30 @@ def mostrar_cubo(estado):
     print(tablero.dibujar_plano(cubo, eje, valor))
 
 
-def ejecucion_radar(estado):
-    """Pide metodo y letra; muestra puntos y metricas de busqueda sobre el cubo propio"""
+def mostrar_mapa_probabilidad(estado):
+    """Calcula y dibuja un plano del mapa de probabilidad sobre el cubo atacado del jugador actual."""
     jugador = obtener_jugador_actual(estado)
-    print('1 - Busqueda lineal\n2 - Busqueda optimizada')
-    metodos = {'1': radar.busqueda_nave_lineal, '2': radar.busqueda_nave_optimizada}
-    datos = {'1': jugador['tablero_propio'], '2': jugador['indice_naves']}
-    opcion = leer_opcion('Opcion: ', r'[12]')
-    letra = leer_opcion('Nave (F/D/S/C/P/E): ', r'[FfDdSsCcPpEe]').upper()
-    puntos, metricas = metodos[opcion](datos[opcion], letra)
-    print('Celdas de las naves de ese tipo:', puntos)
+    rival = obtener_jugador_rival(estado)
+    mejor_punto, puntaje_max, mapa_prob = radar.mejor_objetivo_probabilidad(
+        jugador['tablero_atacado'], rival['flota']
+    )
+    eje = leer_opcion('Eje fijo (z/x/y): ', r'[zZxXyY]').lower()
+    valor = leer_entero('Valor del plano: ', 1, estado['tamano_cubo'])
+    print(radar.dibujar_plano_probabilidad(mapa_prob, eje, valor))
+    print(f'Sugerencia del radar (mayor probabilidad): {mejor_punto} (puntaje {puntaje_max})')
+
+
+def ejecucion_radar(estado):
+    """Pide uno de los 3 metodos de busqueda en radar.py recibiendo estado; muestra ganador y metricas."""
+    print('1 - Busqueda lineal\n2 - Busqueda optimizada\n3 - Busqueda recursiva')
+    metodos = {
+        '1': radar.busqueda_nave_lineal,
+        '2': radar.busqueda_nave_optimizada,
+        '3': radar.busqueda_nave_recursiva
+    }
+    opcion = leer_opcion('Opcion: ', r'[123]')
+    ganador, metricas = metodos[opcion](estado)
+    print('Hay ganador:', 'si' if ganador else 'no')
     print('Metricas:', metricas)
 
 
@@ -449,8 +490,8 @@ def informar_guardado(estado):
 
 def jugar_partida(estado):
     """Continua el estado recibido, alterna turnos y muestra el resumen final"""
-    acciones={'1':pedir_disparo,'2':mostrar_cubo,'3':guardado.guardarPartida,
-              '4':ejecucion_radar,'5':mostrar_estadisticas}
+    acciones={'1':pedir_disparo,'2':mostrar_cubo,'3':registro.guardarPartida,
+              '4':ejecucion_radar,'5':mostrar_estadisticas,'6':mostrar_mapa_probabilidad}
 
     # Diccionario para despachar la IA segun la dificultad elegida
     ia_maquina = {
@@ -463,13 +504,15 @@ def jugar_partida(estado):
         print(f"--- Turno de {jugador['nombre']} ---")
         try:
             if jugador['tipo'] == 'maquina':
-                # Ejecuta turno_maquina o maquinaLevelImposible segun estado['dificultad']
-                ia_maquina[estado['dificultad']](estado)
+                # Ejecuta turno_maquina o maquinaLevelImposible segun la dificultad de la maquina actual
+                ia_maquina[obtener_dificultad_actual(estado)](estado)
                 print(estado['historial'][-1]['mensaje'])
             else:
-                print('1 - Disparar\n2 - Ver el cubo\n3 - Guardar y salir\n4 - Busquedas\n5 - Estadisticas')
-                opcion = leer_opcion('Opcion: ', r'[1-5]')
-                acciones[opcion](estado)
+                print('1 - Disparar\n2 - Ver el cubo\n3 - Guardar y salir\n4 - Busquedas\n5 - Estadisticas\n6 - Mapa de probabilidad')
+                opcion = leer_opcion('Opcion: ', r'[1-6]')
+                resultado_accion = acciones[opcion](estado)
+                if opcion == '3' and resultado_accion == 'guardada':
+                    return
                 if opcion == '1' and not hay_ganador(estado):
                     input('Enter para terminar el turno: ')
                     print('\n' * 40)
@@ -510,9 +553,19 @@ def iniciar_vs_maquina():
     comenzar_partida(nueva_partida_vs_maquina, dificultad)
 
 
+def iniciar_maquina_vs_maquina():
+    """Pide las dificultades de ambas maquinas e inicia una partida maquina contra maquina"""
+    niveles = {'1': 'facil', '2': 'imposible'}
+    print('Dificultad Maquina 1:\n1 - Facil\n2 - Imposible')
+    dif1 = niveles[leer_opcion('Dificultad: ', r'[12]')]
+    print('Dificultad Maquina 2:\n1 - Facil\n2 - Imposible')
+    dif2 = niveles[leer_opcion('Dificultad: ', r'[12]')]
+    comenzar_partida(nueva_partida_maquina_vs_maquina, (dif1, dif2))
+
+
 def informar_maquinas():
-    """Informa el alcance de la partida entre maquinas en esta entrega"""
-    print('entrega 3')
+    """Inicia una partida entre dos maquinas"""
+    iniciar_maquina_vs_maquina()
 
 
 def salir():
@@ -522,13 +575,13 @@ def salir():
 
 
 def main():
-    guardado.cargarEstadoGlobal()
     """Muestra el menu principal y ejecuta una opcion. Devuelve 0 al salir o 1 para continuar"""
+    registro.cargarEstadoGlobal()
     print('===== OPERACION CUBO =====')
     print('1 - Partida uno contra uno\n2 - Partida uno contra la maquina')
     print('3 - Partida maquina contra maquina\n4 - Continuar una partida guardada\n5 - Salir')
-    acciones = {'1': iniciar_1v1, '2': iniciar_vs_maquina, '3': informar_maquinas,
-                '4': guardado.cargarPartida, '5': salir}
+    acciones = {'1': iniciar_1v1, '2': iniciar_vs_maquina, '3': iniciar_maquina_vs_maquina,
+                '4': registro.cargarPartida, '5': salir}
     try:
         opcion = leer_opcion('Opcion: ', r'[1-5]')
         resultado = acciones[opcion]()

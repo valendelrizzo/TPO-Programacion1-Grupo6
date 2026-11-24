@@ -35,10 +35,8 @@ def obtener_rebanada(mapa,eje,indice):
   elif eje=='y':
     return [[mapa[z][x][indice]for x in range(len(mapa[0]))]for z in range(len(mapa))]
 
-#ACA: PREGUNTARLE AL PROFE QUE ONDA EL TIPO DE DATO DE RETORNO DE ESTA COSA 
-# tira como que puede lelgar a devolver None
 def aplicar_rebanada(mapa,rebanada,eje,indice):
-  """Escribe un plano con indice desde 0. Lanza ErrorTablero si no es valido."""
+  """Escribe un plano con indice desde 0 y devuelve el cubo. Lanza ErrorTablero si no es valido."""
   validar_plano(mapa,eje,indice)
   if len(rebanada)!=len(mapa):
     raise ErrorTablero('La rebanada debe tener el tamano del cubo.')
@@ -57,6 +55,7 @@ def aplicar_rebanada(mapa,rebanada,eje,indice):
     for z in range(len(rebanada)):
       for x in range(len(rebanada[0])):
         mapa[z][x][indice]=rebanada[z][x]
+  return mapa
 
 def crear_tablero(tamano=8,char=AGUA_SIN_EXPLORAR):
   """Devuelve un cubo independiente de listas. Lanza ErrorTablero si tamano no es positivo."""

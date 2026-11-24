@@ -1,4 +1,3 @@
-from ast import Return
 from radar import sonar_por_planos
 import tablero as cubo
 import flota
@@ -80,7 +79,7 @@ def validacion_cordenadas(tablero, punto):
     return 'ejecutado'
 
 
-def ataque_cordenadas(tablero, punto, informacion, flota_rival, ignorar_submarino=False):
+def ataque_coordenadas(tablero, punto, informacion, flota_rival, ignorar_submarino=False):
     """Aplica un impacto y devuelve su detalle. Recibe punto desde 1; lanza ErrorTablero."""
     if not en_rango(tablero, punto):
         return {'punto': punto, 'resultado': 'invalida'}
@@ -131,7 +130,7 @@ def aplicar_celdas(codigo, tablero, punto, informacion, flota_rival, puntos):
     """Aplica puntos validos y devuelve un resultado. Lanza ErrorTablero ante cubos invalidos."""
     resultados = []
     for celda in puntos:
-        resultados.append(ataque_cordenadas(tablero, celda, informacion, flota_rival, codigo == 'L'))
+        resultados.append(ataque_coordenadas(tablero, celda, informacion, flota_rival, codigo == 'L'))
     estado = 'no ejecutado'
     for resultado in resultados:
         if resultado['resultado'] in (cubo.IMPACTO, cubo.AGUA_MARCADA, 'inmune'):
@@ -190,7 +189,7 @@ def celdas_sonar(tablero, punto, informacion, flota_rival, eje=None):
 
 def ejecutar_sonar(tablero, informacion, eje, indice, municion_jugador):
     """Recibe un valor desde 1, descuenta municion y devuelve contactos. Lanza ErrorJuego."""
-    return selec_catalogo('S', None, tablero, informacion, municion_jugador, [], eje, indice)
+    return disparar_arma('S', None, tablero, informacion, municion_jugador, [], eje, indice)
 
 def celdas_ondaexpansiva(tablero, punto, informacion, flota_rival, eje=None):
     """Propaga una onda expansiva recursiva desde el punto y ataca los puntos alcanzados."""
@@ -207,35 +206,31 @@ def celdas_ondaexpansiva(tablero, punto, informacion, flota_rival, eje=None):
 
     def propagar(actual, radio, memoria=None, afectados=None):
         if memoria is None:
-            memoria = [[[0 for _ in range(len(tablero))] for _ in range(len(tablero))]
-                       for _ in range(len(tablero))]
+            memoria = {}
         if afectados is None:
             afectados = []
 
-        # 1. CASO BASE: Se acabó el radio o se salió del tablero (usa tu función en_rango)
+        # 1. CASO BASE
         if radio <= 0 or not en_rango(tablero, actual):
             return afectados
 
-        # 2. CASO BASE: Ya pasamos por este punto con mayor o igual radio
-        z, x, y = actual
-        if memoria[z - 1][x - 1][y - 1] >= radio:
+        # 2. CASO BASE
+        if actual in memoria and memoria[actual] >= radio:
             return afectados
 
-        # Guardamos en memoria y acumulamos la coordenada en la lista
-        memoria[z - 1][x - 1][y - 1] = radio
+        memoria[actual] = radio
         if actual not in afectados:
             afectados.append(actual)
 
-        # 3. CASO RECURSIVO: Expandimos a los vecinos
+        # 3. CASO RECURSIVO
+        z, x, y = actual
         for dx, dy, dz, costo in MOVIMIENTOS:
-            nuevo_punto = [z + dz, x + dx, y + dy]
+            nuevo_punto = (z + dz, x + dx, y + dy)
             propagar(nuevo_punto, radio - costo, memoria, afectados)
 
         return afectados
 
-    # Primero juntamos todos los puntos con la recursión (radio=3.0)
-    puntos = propagar(punto, 3.0)
-    # Recién al terminar, aplicamos el ataque una sola vez (igual que tus otras armas)
+    puntos = [list(p) for p in propagar(tuple(punto), 3.0)]
     return aplicar_celdas('O', tablero, punto, informacion, flota_rival, puntos)
 
 def celdas_torpedoguiado(tablero, punto, informacion, flota_rival, eje=None):
@@ -246,30 +241,42 @@ def celdas_torpedoguiado(tablero, punto, informacion, flota_rival, eje=None):
         [0, 0, 1], [0, 0, -1]
     ]
 
+    if punto is None:
+        raise ErrorArmamento('No hay un punto de impacto previo para guiar el torpedo.')
+
     nave = flota.obtener_nave_en_punto(flota_rival, punto)
+    
+    if nave is None:
+        raise ErrorArmamento('No hay ninguna nave en el punto indicado.')
+
+    conjunto_celdas = flota.obtener_conjunto_celdas(nave)
 
     def buscar_vecina(actual, visitados=None):
         if visitados is None:
             visitados = []
 
-        if actual in visitados or actual not in nave['celdas']:
+        if actual in visitados or actual not in conjunto_celdas:
             return None
 
         visitados.append(actual)
 
         if cubo.leer_celda(tablero, actual) != cubo.IMPACTO:
-            return actual
+            return list(actual)
 
         z, x, y = actual
         for dz, dx, dy in VECINOS:
-            vecino = [z + dz, x + dx, y + dy]
+            vecino = (z + dz, x + dx, y + dy)
             objetivo = buscar_vecina(vecino, visitados)
             if objetivo is not None:
                 return objetivo
 
         return None
 
-    celda_objetivo = buscar_vecina(punto)
+    celda_objetivo = buscar_vecina(tuple(punto))
+    
+    if celda_objetivo is None:
+        raise ErrorArmamento('La nave seleccionada no tiene celdas contiguas sin impactar.')
+
     return aplicar_celdas('G', tablero, punto, informacion, flota_rival, [celda_objetivo])
 
 def catalogo(municion_jugador=None):
@@ -295,7 +302,7 @@ ARMAS = {
 }
 
 
-def selec_catalogo(opcion, punto, tablero, informacion, municion_jugador, flota_rival,
+def disparar_arma(opcion, punto, tablero, informacion, municion_jugador, flota_rival,
                   eje=None, indice=None):
     """Despacha el arma y devuelve el resultado. Lanza ErrorArmamento por jugada invalida."""
     if not isinstance(opcion, str):
@@ -316,3 +323,6 @@ def selec_catalogo(opcion, punto, tablero, informacion, municion_jugador, flota_
         raise ErrorArmamento(resultado['motivo'])
     resultado['municion_restante'] = descontar_municion(opcion, municion_jugador, 1)
     return resultado
+
+
+selec_catalogo = disparar_arma
