@@ -323,6 +323,3 @@ def disparar_arma(opcion, punto, tablero, informacion, municion_jugador, flota_r
         raise ErrorArmamento(resultado['motivo'])
     resultado['municion_restante'] = descontar_municion(opcion, municion_jugador, 1)
     return resultado
-
-
-selec_catalogo = disparar_arma
