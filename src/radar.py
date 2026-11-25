@@ -70,8 +70,15 @@ def busqueda_nave_lineal(estado):
                         if atacado[z][x][y] != HUNDIDO:
                             todas_hundidas = False
 
-        if hay_naves and todas_hundidas and ganador is None:
+        if hay_naves and todas_hundidas:
             ganador = posible_ganador
+            metricas = {
+                    'comparaciones': comparaciones,
+                    'tiempo_ms': (perf_counter() - inicio) * 1000,
+                    'profundidad_max': 0
+                }
+            
+            return ganador, metricas
 
     metricas = {
         'comparaciones': comparaciones,
@@ -105,8 +112,15 @@ def busqueda_nave_recursiva(estado):
         comparaciones += cantidad
         profundidad_max = max(profundidad_max, profundidad)
 
-        if hay_naves and todas_hundidas and ganador is None:
+        if hay_naves and todas_hundidas:
             ganador = posible_ganador
+            metricas = {
+                    'comparaciones': comparaciones,
+                    'tiempo_ms': (perf_counter() - inicio) * 1000,
+                    'profundidad_max': profundidad_max
+                }
+            
+            return ganador , metricas
 
     metricas = {
         'comparaciones': comparaciones,
@@ -157,7 +171,7 @@ def busqueda_nave_optimizada(estado):
                 if atacado[z - 1][x - 1][y - 1] != HUNDIDO:
                     todas_hundidas = False
 
-        if hay_naves and todas_hundidas and ganador is None:
+        if hay_naves and todas_hundidas:
             ganador = posible_ganador
 
     metricas = {
@@ -189,10 +203,7 @@ def sonar_por_planos(tablero_atacado, matriz_rival, eje_fijo, indice):
     tablero.aplicar_rebanada(tablero_atacado, plano_atacado, eje_fijo, indice)
     return contactos, tablero_atacado
 
-
-# =========================================================================
-# MAPA DE PROBABILIDAD
-# =========================================================================
+#Mapa probabilidad
 
 def calcular_mapa_probabilidad(tablero_atacado, flota_rival=None):
     """
